@@ -11,7 +11,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos?sort[0][field]=Created+time&sort[0][direction]=desc&maxRecords=20`, {
+   fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos?maxRecords=20`, {
       headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}` }
     })
     .then(r => r.json())
