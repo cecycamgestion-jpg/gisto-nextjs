@@ -67,7 +67,6 @@ export default function Upload() {
       xhr.addEventListener('load',()=>xhr.status===200?res():rej(new Error(`Error S3: ${xhr.status}`)))
       xhr.addEventListener('error',()=>rej(new Error('Error de conexión')))
       xhr.timeout=600000; xhr.open('PUT', upload_url)
-xhr.setRequestHeader('x-amz-acl', 'public-read')
 xhr.send(file)
     })
     return public_url
