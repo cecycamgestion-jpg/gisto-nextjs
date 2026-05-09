@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 
 const AIRTABLE_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
@@ -12,6 +12,94 @@ const MOTOR_STAGES = [
   {id:'corte',label:'Corte anatómico',desc:'Silencios naturales'},
   {id:'empaquetado',label:'Empaquetado',desc:'ZIP profesional'},
 ]
+
+const PROGRESS_MESSAGES = [
+  'Transcribiendo audio...',
+  'Analizando contenido pedagógico...',
+  'Limpiando interacciones del aula...',
+  'Aplicando corte anatómico...',
+  'Aplicando magia GISTO ✨',
+  'Empaquetando tu curso...',
+  'Un momento por favor...',
+  'Casi listo...',
+]
+
+function AnimatedProgress({createdAt}: {createdAt: string}) {
+  const [msgIdx, setMsgIdx] = React.useState(0)
+  const [barWidth, setBarWidth] = React.useState(5)
+
+  React.useEffect(() => {
+    const created = new Date(createdAt).getTime()
+    const totalMs = 15 * 60 * 1000 // 15 min estimado
+    
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - created
+      const pct = Math.min(92, (elapsed / totalMs) * 100)
+      setBarWidth(Math.max(5, pct))
+      setMsgIdx(Math.floor(elapsed / 20000) % PROGRESS_MESSAGES.length)
+    }, 1000)
+    
+    return () => clearInterval(interval)
+  }, [createdAt])
+
+  return (
+    <div style={{padding:'0 16px 16px'}}>
+      <div style={{background:'var(--s2)',borderRadius:'10px',padding:'16px',border:'1px solid rgba(255,176,32,.15)'}}>
+        {/* Message */}
+        <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
+          <span style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--warn)',boxShadow:'0 0 8px var(--warn)',flexShrink:0,animation:'pulse 1s infinite',display:'inline-block'}}/>
+          <span style={{fontSize:'13px',fontWeight:600,color:'var(--warn)'}}>{PROGRESS_MESSAGES[msgIdx]}</span>
+        </div>
+        {/* Progress bar */}
+        <div style={{height:'4px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden',marginBottom:'14px'}}>
+          <div style={{
+            height:'100%',
+            width:`${barWidth}%`,
+            background:'linear-gradient(90deg,var(--c),var(--c2),var(--ok))',
+            backgroundSize:'200%',
+            borderRadius:'2px',
+            transition:'width 1s ease',
+            animation:'shimmer 2s linear infinite',
+            boxShadow:'0 0 8px rgba(0,168,232,.5)'
+          }}/>
+        </div>
+        {/* Stages */}
+        <div style={{display:'flex',alignItems:'center'}}>
+          {MOTOR_STAGES.map((stage, i) => {
+            const stageIdx = Math.floor(barWidth / 20)
+            const done = i < stageIdx
+            const active = i === stageIdx
+            return (
+              <div key={stage.id} style={{display:'flex',alignItems:'center',flex:1}}>
+                <div style={{textAlign:'center' as const,flex:1}}>
+                  <div style={{
+                    width:'26px',height:'26px',borderRadius:'50%',
+                    margin:'0 auto 5px',
+                    display:'flex',alignItems:'center',justifyContent:'center',
+                    background:done?'rgba(0,229,160,.15)':active?'rgba(255,176,32,.15)':'rgba(255,255,255,.04)',
+                    border:`1px solid ${done?'rgba(0,229,160,.4)':active?'rgba(255,176,32,.5)':'rgba(255,255,255,.08)'}`,
+                    transition:'all .5s',
+                    animation:active?'pulse 1.5s infinite':'none'
+                  }}>
+                    {done ? (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    ) : (
+                      <span style={{fontSize:'9px',fontWeight:700,color:active?'var(--warn)':'var(--t3)',fontFamily:'monospace'}}>0{i+1}</span>
+                    )}
+                  </div>
+                  <div style={{fontSize:'9px',fontWeight:600,color:done?'var(--ok)':active?'var(--warn)':'var(--t3)',lineHeight:1.2,transition:'color .5s'}}>{stage.label}</div>
+                </div>
+                {i < MOTOR_STAGES.length-1 && (
+                  <div style={{width:'12px',height:'1px',background:done?'rgba(0,229,160,.3)':'rgba(255,255,255,.05)',flexShrink:0,marginBottom:'18px',transition:'background .5s'}}/>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function getStageIndex(estado: string, createdAt: string) {
   const e = estado?.toLowerCase()
@@ -255,35 +343,9 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* MOTOR STAGES - solo cuando está procesando */}
+                {/* MOTOR STAGES - animacion en tiempo real */}
                 {processing && (
-                  <div style={{padding:'0 16px 16px'}}>
-                    <div style={{background:'var(--s2)',borderRadius:'10px',padding:'14px',border:'1px solid var(--b)'}}>
-                      <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'1.5px',textTransform:'uppercase' as const,color:'var(--t3)',marginBottom:'12px',display:'flex',alignItems:'center',gap:'6px'}}>
-                        <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'var(--warn)',boxShadow:'0 0 6px var(--warn)',animation:'pulse 1.5s infinite',display:'inline-block'}}/>
-                        Motor GISTO procesando
-                      </div>
-                      <div style={{display:'flex',alignItems:'center',gap:'0'}}>
-                        {MOTOR_STAGES.map((stage, i) => (
-                          <div key={stage.id} style={{display:'flex',alignItems:'center',flex:1}}>
-                            <div style={{textAlign:'center' as const,flex:1}}>
-                              <div style={{width:'28px',height:'28px',borderRadius:'50%',margin:'0 auto 6px',display:'flex',alignItems:'center',justifyContent:'center',background:i<stageIdx?'rgba(0,229,160,.15)':i===stageIdx?'rgba(255,176,32,.15)':'rgba(255,255,255,.04)',border:`1px solid ${i<stageIdx?'rgba(0,229,160,.3)':i===stageIdx?'rgba(255,176,32,.4)':'rgba(255,255,255,.08)'}`,transition:'.3s',animation:i===stageIdx?'pulse 1.5s infinite':'none'}}>
-                                {i<stageIdx?(
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                ):(
-                                  <span style={{fontSize:'9px',fontWeight:700,color:i===stageIdx?'var(--warn)':'var(--t3)',fontFamily:'monospace'}}>0{i+1}</span>
-                                )}
-                              </div>
-                              <div style={{fontSize:'9px',fontWeight:600,color:i<=stageIdx?'var(--t1)':'var(--t3)',lineHeight:1.3}}>{stage.label}</div>
-                            </div>
-                            {i<MOTOR_STAGES.length-1&&(
-                              <div style={{width:'16px',height:'1px',background:i<stageIdx?'rgba(0,229,160,.3)':'rgba(255,255,255,.06)',flexShrink:0,marginBottom:'22px'}}/>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  <AnimatedProgress createdAt={v.fields?.['Created time'] || v.createdTime || new Date().toISOString()} />
                 )}
 
                 {/* RESULTADO - cuando está completado */}
@@ -306,7 +368,7 @@ export default function Dashboard() {
           })}
         </div>
       </main>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}`}</style>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}} @keyframes shimmer{0%{background-position:0%}100%{background-position:200%}}`}</style>
     </div>
   )
 }
