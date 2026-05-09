@@ -260,7 +260,7 @@ export default function Upload() {
                 <button onClick={()=>setStep('form')} style={{flex:1,padding:'14px',background:'var(--s2)',border:'1px solid var(--b)',color:'var(--t2)',borderRadius:'10px',fontWeight:600,fontSize:'14px',cursor:'pointer'}}>
                   Cambiar video
                 </button>
-                <button onClick={handleProcesar} style={{...C.btn,flex:2}}>
+                <button onClick={handleAnalizar} style={{...C.btn,flex:2}}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                   Procesar con Motor GISTO
                 </button>
