@@ -92,7 +92,7 @@ export default function Planes() {
             {PLANES.map(plan=>(
               <div key={plan.id} style={{
   background: plan.popular ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)' : '#0C1018',
-  border: '1px solid ${plan.popular?'var(--c)':'var(--b)'},
+ border: `1px solid ${plan.popular?'var(--c)':'var(--b)'}`,
   borderRadius:'18px',
   padding:'24px',
   position:'relative' as const
