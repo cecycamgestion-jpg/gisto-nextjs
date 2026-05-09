@@ -63,39 +63,7 @@ function AnimatedProgress({createdAt}: {createdAt: string}) {
             boxShadow:'0 0 8px rgba(0,168,232,.5)'
           }}/>
         </div>
-        {/* Stages */}
-        <div style={{display:'flex',alignItems:'center'}}>
-          {MOTOR_STAGES.map((stage, i) => {
-            const stageIdx = Math.floor(barWidth / 20)
-            const done = i < stageIdx
-            const active = i === stageIdx
-            return (
-              <div key={stage.id} style={{display:'flex',alignItems:'center',flex:1}}>
-                <div style={{textAlign:'center' as const,flex:1}}>
-                  <div style={{
-                    width:'26px',height:'26px',borderRadius:'50%',
-                    margin:'0 auto 5px',
-                    display:'flex',alignItems:'center',justifyContent:'center',
-                    background:done?'rgba(0,229,160,.15)':active?'rgba(255,176,32,.15)':'rgba(255,255,255,.04)',
-                    border:`1px solid ${done?'rgba(0,229,160,.4)':active?'rgba(255,176,32,.5)':'rgba(255,255,255,.08)'}`,
-                    transition:'all .5s',
-                    animation:active?'pulse 1.5s infinite':'none'
-                  }}>
-                    {done ? (
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                    ) : (
-                      <span style={{fontSize:'9px',fontWeight:700,color:active?'var(--warn)':'var(--t3)',fontFamily:'monospace'}}>0{i+1}</span>
-                    )}
-                  </div>
-                  <div style={{fontSize:'9px',fontWeight:600,color:done?'var(--ok)':active?'var(--warn)':'var(--t3)',lineHeight:1.2,transition:'color .5s'}}>{stage.label}</div>
-                </div>
-                {i < MOTOR_STAGES.length-1 && (
-                  <div style={{width:'12px',height:'1px',background:done?'rgba(0,229,160,.3)':'rgba(255,255,255,.05)',flexShrink:0,marginBottom:'18px',transition:'background .5s'}}/>
-                )}
-              </div>
-            )
-          })}
-        </div>
+
       </div>
     </div>
   )
