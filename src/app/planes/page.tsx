@@ -90,11 +90,9 @@ export default function Planes() {
 
           <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'16px'}}>
             {PLANES.map(plan=>(
-              <div key={plan.id} style={{background:'var(--s1)',border:`1px solid ${plan.popular?'var(--c)':'var(--b)'}`,borderRadius:'18px',padding:'24px',position:'relative' as const,style={{
-  background: plan.popular
-    ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)'
-    : '#0C1018',
-  border:1px solid ${plan.popular?'var(--c)':'var(--b)'},
+              <div key={plan.id} style={{
+  background: plan.popular ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)' : '#0C1018',
+  border: 1px solid ${plan.popular?'var(--c)':'var(--b)'},
   borderRadius:'18px',
   padding:'24px',
   position:'relative' as const
