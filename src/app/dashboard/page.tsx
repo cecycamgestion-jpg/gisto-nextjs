@@ -94,8 +94,10 @@ export default function Dashboard() {
 
   const fetchVideos = useCallback(async () => {
     try {
+      const userEmail = JSON.parse(localStorage.getItem('gisto_user')||'{}').email || ''
+      const filter = userEmail ? `&filterByFormula=${encodeURIComponent(`{Usuario_Email}="${userEmail}"`)}` : ''
       const r = await fetch(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos?maxRecords=50`,
+        `https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos?maxRecords=50${filter}`,
         {headers: {'Authorization': `Bearer ${AIRTABLE_KEY}`}}
       )
       const data = await r.json()
