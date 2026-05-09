@@ -13,11 +13,22 @@ const MOTOR_STAGES = [
   {id:'empaquetado',label:'Empaquetado',desc:'ZIP profesional'},
 ]
 
-function getStageIndex(estado: string) {
+function getStageIndex(estado: string, createdAt: string) {
   const e = estado?.toLowerCase()
-  if(e === 'pendiente') return 0
-  if(e === 'procesando') return 2
   if(e === 'completado') return 5
+  if(e === 'pendiente') return 0
+  if(e === 'procesando') {
+    // Animar progreso basado en tiempo transcurrido
+    // Cada etapa dura ~3 minutos en promedio
+    const created = new Date(createdAt).getTime()
+    const now = Date.now()
+    const minutos = (now - created) / 60000
+    if(minutos < 2) return 1   // Transcripcion
+    if(minutos < 5) return 2   // Analisis IA
+    if(minutos < 8) return 3   // Limpieza
+    if(minutos < 11) return 4  // Corte anatomico
+    return 4                    // Empaquetando
+  }
   return 0
 }
 
@@ -214,7 +225,7 @@ export default function Dashboard() {
             const estado = f.Estado || 'Pendiente'
             const done = estado === 'Completado'
             const processing = estado === 'Procesando' || estado === 'Pendiente'
-            const stageIdx = getStageIndex(estado)
+            const stageIdx = getStageIndex(estado, v.fields?.['Created time'] || v.createdTime || '')
 
             return (
               <div key={v.id} style={{background:'var(--s1)',border:`1px solid ${processing?'rgba(255,176,32,.2)':done?'rgba(0,229,160,.15)':'var(--b)'}`,borderRadius:'14px',marginBottom:'10px',overflow:'hidden',transition:'.3s'}}>

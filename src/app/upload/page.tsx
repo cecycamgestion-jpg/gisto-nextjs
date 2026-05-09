@@ -359,7 +359,19 @@ export default function Upload() {
                   </div>
                 )}
 
-                {error&&<div style={{padding:'12px 16px',borderRadius:'10px',fontSize:'13px',marginBottom:'16px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)'}}>⚠️ {error}</div>}
+                {/* NOMBRE DEL CURSO */}
+                <div style={{marginBottom:'16px'}}>
+                  <label style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,display:'block',marginBottom:'8px'}}>Nombre del curso</label>
+                  <div style={{position:'relative' as const}}>
+                    <div style={{position:'absolute' as const,left:'12px',top:'50%',transform:'translateY(-50%)'}}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </div>
+                    <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej: Excel Avanzado 2026"
+                      style={{width:'100%',background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'10px',padding:'11px 14px 11px 36px',color:'var(--t1)',fontSize:'13px',outline:'none',fontFamily:'inherit'}}/>
+                  </div>
+                </div>
+
+              {error&&<div style={{padding:'12px 16px',borderRadius:'10px',fontSize:'13px',marginBottom:'16px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)'}}>⚠️ {error}</div>}
 
                 <button onClick={handleAnalizar} style={C.btn}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
