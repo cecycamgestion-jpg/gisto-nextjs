@@ -88,6 +88,9 @@ export default function Dashboard() {
   const [videos, setVideos] = useState<any[]>([])
   const [filtro, setFiltro] = useState('todos')
   const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
+  const [creditos, setCreditos] = useState(0)
+  const [creditosMax, setCreditosMax] = useState(20)
 
   const fetchVideos = useCallback(async () => {
     try {
@@ -110,8 +113,30 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
+    // Cargar usuario desde localStorage
+    const u = localStorage.getItem('gisto_user')
+    if (u) {
+      const parsed = JSON.parse(u)
+      setUser(parsed)
+      // Obtener creditos reales de Airtable
+      fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios/${parsed.id}`, {
+        headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}` }
+      })
+      .then(r => r.json())
+      .then(data => {
+        const cred = data.fields?.creditos_minutos || 0
+        setCreditos(cred)
+        // Max creditos segun plan
+        const plan = data.fields?.plan || 'Free'
+        const maxMap: any = { 'Free': 20, 'Starter': 120, 'Profesional': 480, 'Academia': 1200, 'Pack Evento': 480 }
+        setCreditosMax(maxMap[plan] || 20)
+        // Actualizar localStorage
+        const updated = { ...parsed, creditos: cred, plan }
+        localStorage.setItem('gisto_user', JSON.stringify(updated))
+      })
+      .catch(() => {})
+    }
     fetchVideos()
-    // Polling cada 8 segundos para actualizar estados
     const interval = setInterval(fetchVideos, 8000)
     return () => clearInterval(interval)
   }, [fetchVideos])
@@ -182,15 +207,15 @@ export default function Dashboard() {
         <div style={{marginTop:'auto',background:'rgba(0,168,232,.06)',border:'1px solid var(--b)',borderRadius:'12px',padding:'14px'}}>
           <div style={{fontSize:'11px',color:'var(--t2)',marginBottom:'6px'}}>Créditos disponibles</div>
           <div style={{height:'5px',background:'rgba(0,168,232,.12)',borderRadius:'3px',overflow:'hidden',marginBottom:'6px'}}>
-            <div style={{height:'100%',width:'70%',background:'linear-gradient(90deg,var(--c),var(--c2))',borderRadius:'3px'}}/>
+            <div style={{height:'100%',width:`${Math.min(100,(creditos/creditosMax)*100)}%`,background:'linear-gradient(90deg,var(--c),var(--c2))',borderRadius:'3px'}}/>
           </div>
           <div style={{display:'flex',justifyContent:'space-between',fontSize:'11px',color:'var(--t2)'}}>
-            <strong style={{color:'var(--c)'}}>14 min</strong><span>/ 20 min</span>
+            <strong style={{color:'var(--c)'}}>{creditos} min</strong><span>/ {creditosMax} min</span>
           </div>
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 12px 0',borderTop:'1px solid var(--b)',marginTop:'12px'}}>
-          <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'linear-gradient(135deg,var(--c),var(--c2))',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:800,fontSize:'13px',color:'#000',flexShrink:0}}>A</div>
-          <div><div style={{fontSize:'13px',fontWeight:700}}>Alejandro</div><div style={{fontSize:'11px',color:'var(--t2)'}}>Plan Gratuito</div></div>
+        <Link href="/perfil" style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 12px 0',borderTop:'1px solid var(--b)',marginTop:'12px',textDecoration:'none',cursor:'pointer'}}>
+          <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'linear-gradient(135deg,var(--c),var(--c2))',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:800,fontSize:'13px',color:'#000',flexShrink:0}}>{user?.nombre?.[0]?.toUpperCase()||'U'}</div>
+          <div><div style={{fontSize:'13px',fontWeight:700}}>{user?.nombre||'Usuario'}</div><div style={{fontSize:'11px',color:'var(--t2)'}}>{user?.plan||'Plan Gratuito'}</div></div>
         </div>
       </aside>
 
