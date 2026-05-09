@@ -7,28 +7,28 @@ const PLANES = [
     id:'starter', nombre:'Starter', precio_sol:175, precio_usd:47,
     creditos:120, horas:'2 horas',
     features:['Cápsulas de video pedagógicas','Documentos Word editables','Quizzes y glosario automático','ZIP descargable','Soporte por email'],
-    lemon_url:'https://thegisto.lemonsqueezy.com/buy/starter',
+    lemon_url:'https://thegisto.lemonsqueezy.com/buy/393a7d12-24d7-4c3d-9d60-400143b384b3',
     popular:false, color:'var(--t2)'
   },
   {
     id:'profesional', nombre:'Profesional', precio_sol:649, precio_usd:175,
     creditos:480, horas:'8 horas',
     features:['Todo el plan Starter','Ideal para 1 curso completo','Prioridad en procesamiento','Soporte prioritario','Válido 12 meses'],
-    lemon_url:'https://thegisto.lemonsqueezy.com/buy/profesional',
+    lemon_url:'https://thegisto.lemonsqueezy.com/buy/3368ed41-079d-4a62-8818-e18c4f72d6c6?discount=0',
     popular:true, color:'var(--c)'
   },
   {
     id:'academia', nombre:'Academia', precio_sol:1180, precio_usd:315,
     creditos:1200, horas:'20 horas',
     features:['Para institutos y empresas','Múltiples cursos','Soporte dedicado','Válido 12 meses','Factura disponible'],
-    lemon_url:'https://thegisto.lemonsqueezy.com/buy/academia',
+    lemon_url:'https://thegisto.lemonsqueezy.com/buy/0c0dfc86-589e-43d6-adae-b490947910de?discount=0',
     popular:false, color:'#FFB020'
   },
   {
     id:'evento', nombre:'Pack Evento', precio_sol:599, precio_usd:160,
     creditos:480, horas:'8 hrs continuas',
     features:['Para congresos y eventos','Procesamiento continuo','Entrega en 24 hrs','Coordinación directa','Factura disponible'],
-    lemon_url:'https://thegisto.lemonsqueezy.com/buy/evento',
+    lemon_url:'https://thegisto.lemonsqueezy.com/buy/f2c215a6-4507-48f6-af6a-2a183d60279d?discount=0',
     popular:false, color:'var(--ok)'
   }
 ]
