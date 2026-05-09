@@ -152,9 +152,7 @@ export default function Dashboard() {
             </p>
           </div>
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-            <button onClick={fetchVideos} style={{width:'36px',height:'36px',background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t2)'}}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            </button>
+
             <Link href="/upload" style={{display:'inline-flex',alignItems:'center',gap:'6px',background:'var(--c)',color:'#000',padding:'9px 16px',borderRadius:'8px',fontWeight:700,fontSize:'13px',textDecoration:'none'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nuevo video

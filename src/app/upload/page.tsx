@@ -135,13 +135,13 @@ export default function Upload() {
         <h2 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'30px',fontWeight:900,letterSpacing:'-1px',marginBottom:'12px'}}>¡Video en cola!</h2>
         <p style={{fontSize:'15px',color:'var(--t2)',lineHeight:1.7,marginBottom:'12px'}}>
           El Motor GISTO está procesando tu video.<br/>
-          Recibirás <strong style={{color:'var(--t1)'}}>{modulosElegidos} módulos</strong> pedagógicos.
+          En minutos tendrás tus cápsulas listas en el dashboard.
         </p>
         <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'12px',padding:'16px',marginBottom:'24px',textAlign:'left'}}>
           <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'12px'}}>Recibirás</div>
           {[
-            `${modulosElegidos} cápsulas de video pedagógicas`,
-            `${modulosElegidos} documentos Word (transcripción + quiz + glosario)`,
+            'Cápsulas de video pedagógicas',
+            'Documentos Word (transcripción + quiz + glosario)',
             'Interacciones de aula eliminadas automáticamente',
             'Índice completo del curso',
             'Todo en un ZIP descargable'
@@ -262,7 +262,7 @@ export default function Upload() {
             {item.label}
           </Link>
         ))}
-        <div style={{marginTop:'auto',background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'12px',padding:'16px'}}>
+        <div style={{marginTop:'auto',background:'var(--s2)',overflow:'hidden',border:'1px solid var(--b)',borderRadius:'12px',padding:'16px'}}>
           <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase' as const,color:'var(--t3)',marginBottom:'12px'}}>Motor GISTO</div>
           {[{n:'01',t:'Transcripción',d:'Audio → texto preciso'},{n:'02',t:'Análisis IA',d:'Identifica módulos'},{n:'03',t:'Limpieza de aula',d:'Elimina interacciones'},{n:'04',t:'Corte anatómico',d:'Silencios naturales'},{n:'05',t:'Empaquetado',d:'ZIP profesional'}].map((s,i)=>(
             <div key={i} style={{display:'flex',gap:'10px',marginBottom:i<4?'10px':0,padding:'8px 10px',borderRadius:'8px',background:'rgba(0,168,232,.03)',border:'1px solid rgba(0,168,232,.07)'}}>
