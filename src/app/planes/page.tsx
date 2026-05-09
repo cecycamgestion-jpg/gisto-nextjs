@@ -90,7 +90,15 @@ export default function Planes() {
 
           <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:'16px'}}>
             {PLANES.map(plan=>(
-              <div key={plan.id} style={{background:'var(--s1)',border:`1px solid ${plan.popular?'var(--c)':'var(--b)'}`,borderRadius:'18px',padding:'24px',position:'relative' as const,background:plan.popular?'linear-gradient(160deg,rgba(0,168,232,.09),var(--s1))':'var(--s1)' as any}}>
+              <div key={plan.id} style={{background:'var(--s1)',border:`1px solid ${plan.popular?'var(--c)':'var(--b)'}`,borderRadius:'18px',padding:'24px',position:'relative' as const,style={{
+  background: plan.popular
+    ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)'
+    : '#0C1018',
+  border:1px solid ${plan.popular?'var(--c)':'var(--b)'},
+  borderRadius:'18px',
+  padding:'24px',
+  position:'relative' as const
+}}>
                 {plan.popular&&<div style={{position:'absolute' as const,top:'-11px',left:'50%',transform:'translateX(-50%)',background:'var(--c)',color:'#000',fontSize:'11px',fontWeight:800,padding:'3px 16px',borderRadius:'100px',whiteSpace:'nowrap',letterSpacing:'.5px'}}>MÁS VENDIDO</div>}
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px'}}>
                   <div>
