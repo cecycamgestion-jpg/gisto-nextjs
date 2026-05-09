@@ -84,8 +84,8 @@ export default function Login() {
       <div style={{width:'100%',maxWidth:'420px'}}>
         {/* LOGO */}
         <div style={{textAlign:'center',marginBottom:'32px'}}>
-          <Link href="/" style={{display:'inline-flex',alignItems:'center',gap:'10px',textDecoration:'none',marginBottom:'8px'}}>
-            <img src="/isotipo.png" alt="GISTO" style={{height:'40px'}}/>
+          <Link href="https://www.thegisto.com" style={{display:'inline-flex',alignItems:'center',gap:'10px',textDecoration:'none',marginBottom:'8px'}}>
+            <img src="/isotipo.png" alt="GISTO" style={{height:'52px',filter:'brightness(1.3) drop-shadow(0 0 8px rgba(0,168,232,0.5))'}}/>
             <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:900,fontSize:'22px',color:'var(--t1)'}}>
               THE <span style={{color:'var(--c)'}}>GISTO</span>
             </span>
@@ -154,7 +154,7 @@ export default function Login() {
         </div>
 
         <p style={{textAlign:'center',fontSize:'12px',color:'var(--t3)',marginTop:'20px'}}>
-          <Link href="/" style={{color:'var(--t2)',textDecoration:'none'}}>← Volver a thegisto.com</Link>
+          <Link href="https://www.thegisto.com" style={{color:'var(--t2)',textDecoration:'none'}}>← Volver a thegisto.com</Link>
         </p>
       </div>
       <style>{`@keyframes spin{to{transform:rotate(360deg)}} input:focus{border-color:var(--c)!important;box-shadow:0 0 0 3px rgba(0,168,232,.12);}`}</style>
