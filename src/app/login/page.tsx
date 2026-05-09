@@ -51,7 +51,8 @@ export default function Login() {
         const user = await buscarUsuario(email)
         if (!user) { setError('No existe una cuenta con ese email'); setLoading(false); return }
         if (user.fields.Password !== password) { setError('Contraseña incorrecta'); setLoading(false); return }
-        localStorage.setItem('gisto_user', JSON.stringify({
+document.cookie = `gisto_session=active; path=/; max-age=${60*60*24*7}`        
+localStorage.setItem('gisto_user', JSON.stringify({
           id: user.id,
           email: user.fields.Email,
           nombre: user.fields.Nombre || email.split('@')[0],
@@ -64,7 +65,8 @@ export default function Login() {
         if (existing) { setError('Ya existe una cuenta con ese email'); setLoading(false); return }
         const newUser = await crearUsuario(email, nombre, password)
         if (!newUser.id) { setError('Error creando cuenta'); setLoading(false); return }
-        localStorage.setItem('gisto_user', JSON.stringify({
+document.cookie = `gisto_session=active; path=/; max-age=${60*60*24*7}`        
+localStorage.setItem('gisto_user', JSON.stringify({
           id: newUser.id,
           email,
           nombre,
