@@ -26,7 +26,6 @@ const PROGRESS_MESSAGES = [
 
 function AnimatedProgress({createdAt}: {createdAt: string}) {
   const [msgIdx, setMsgIdx] = React.useState(0)
-  const [barWidth, setBarWidth] = React.useState(5)
 
   React.useEffect(() => {
     const created = new Date(createdAt).getTime()
@@ -34,8 +33,6 @@ function AnimatedProgress({createdAt}: {createdAt: string}) {
     
     const interval = setInterval(() => {
       const elapsed = Date.now() - created
-      const pct = Math.min(92, (elapsed / totalMs) * 100)
-      setBarWidth(Math.max(5, pct))
       setMsgIdx(Math.floor(elapsed / 20000) % PROGRESS_MESSAGES.length)
     }, 1000)
     
@@ -50,17 +47,16 @@ function AnimatedProgress({createdAt}: {createdAt: string}) {
           <span style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--warn)',boxShadow:'0 0 8px var(--warn)',flexShrink:0,animation:'pulse 1s infinite',display:'inline-block'}}/>
           <span style={{fontSize:'13px',fontWeight:600,color:'var(--warn)'}}>{PROGRESS_MESSAGES[msgIdx]}</span>
         </div>
-        {/* Progress bar */}
-        <div style={{height:'4px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden',marginBottom:'14px'}}>
+        {/* Barra indeterminada - loop infinito */}
+        <div style={{height:'4px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden',marginBottom:'14px',position:'relative' as const}}>
           <div style={{
+            position:'absolute' as const,
             height:'100%',
-            width:`${barWidth}%`,
-            background:'linear-gradient(90deg,var(--c),var(--c2),var(--ok))',
-            backgroundSize:'200%',
+            width:'40%',
+            background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)',
             borderRadius:'2px',
-            transition:'width 1s ease',
-            animation:'shimmer 2s linear infinite',
-            boxShadow:'0 0 8px rgba(0,168,232,.5)'
+            animation:'indeterminate 1.8s ease-in-out infinite',
+            boxShadow:'0 0 12px rgba(0,168,232,.6)'
           }}/>
         </div>
 
@@ -336,7 +332,7 @@ export default function Dashboard() {
           })}
         </div>
       </main>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}} @keyframes shimmer{0%{background-position:0%}100%{background-position:200%}}`}</style>
+      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}} @keyframes shimmer{0%{background-position:0%}100%{background-position:200%}} @keyframes indeterminate{0%{left:-40%;right:100%}60%{left:100%;right:-40%}100%{left:100%;right:-40%}}`}</style>
     </div>
   )
 }
