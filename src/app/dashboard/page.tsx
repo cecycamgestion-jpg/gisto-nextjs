@@ -218,7 +218,7 @@ export default function Dashboard() {
         <Link href="/perfil" style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 12px 0',borderTop:'1px solid var(--b)',marginTop:'12px',textDecoration:'none',cursor:'pointer'}}>
           <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'linear-gradient(135deg,var(--c),var(--c2))',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:800,fontSize:'13px',color:'#000',flexShrink:0}}>{user?.nombre?.[0]?.toUpperCase()||'U'}</div>
           <div><div style={{fontSize:'13px',fontWeight:700}}>{user?.nombre||'Usuario'}</div><div style={{fontSize:'11px',color:'var(--t2)'}}>{user?.plan||'Plan Gratuito'}</div></div>
-       </Link>
+        </div>
       </aside>
 
       <main style={S.main}>
@@ -243,7 +243,7 @@ export default function Dashboard() {
           {/* STATS */}
           <div style={S.statGrid}>
             {[
-              {label:'Créditos',val:'14 min',badge:'Freemium',bc:'var(--warn)',icon:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2'},
+              {label:'Créditos',val:`${creditos} min`,badge:user?.plan||'Free',bc:'var(--warn)',icon:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2'},
               {label:'Videos procesados',val:String(videos.length),badge:'Total',bc:'var(--ok)',icon:'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z'},
               {label:'Módulos generados',val:String(modulos),badge:'Total',bc:'var(--ok)',icon:'M22 12h-4l-3 9L9 3l-3 9H2'},
               {label:'En proceso',val:String(enProceso),badge:enProceso>0?'Activo':'Libre',bc:enProceso>0?'var(--warn)':'var(--ok)',icon:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2'},
