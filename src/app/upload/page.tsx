@@ -66,8 +66,7 @@ export default function Upload() {
       xhr.upload.addEventListener('progress',e=>{if(e.lengthComputable) setProgreso(Math.round(e.loaded/e.total*95))})
       xhr.addEventListener('load',()=>xhr.status===200?res():rej(new Error(`Error S3: ${xhr.status}`)))
       xhr.addEventListener('error',()=>rej(new Error('Error de conexión')))
-      xhr.timeout=600000; xhr.open('PUT', upload_url)
-xhr.send(file)
+      xhr.timeout=600000; xhr.open('PUT',upload_url); xhr.send(file)
     })
     return public_url
   }
@@ -77,31 +76,30 @@ xhr.send(file)
     if(tab==='link'){
       if(!url.startsWith('http')){setError('Ingresa un link válido de Drive o Dropbox');return}
       setVideoUrl(url)
-      await analizarVideo(url)
+      setStep('uploading')
+      await guardarYProcesar(url)
     } else {
       if(!archivo){setError('Selecciona un archivo de video');return}
       setStep('uploading')
       try {
         const pubUrl = await subirS3(archivo)
         setVideoUrl(pubUrl)
-        await analizarVideo(pubUrl)
+        await guardarYProcesar(pubUrl)
       } catch(e:any){
         setError(e.message); setStep('error')
       }
     }
   }
 
-  async function handleProcesar() {
+  async function guardarYProcesar(vUrl: string) {
     try {
-      setStep('uploading')
       const r = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos`,{
         method:'POST',
         headers:{'Authorization':`Bearer ${AIRTABLE_KEY}`,'Content-Type':'application/json'},
         body:JSON.stringify({fields:{
-          URL: videoUrl,
+          URL: vUrl,
           VideoID: nombre || `Video-${Date.now()}`,
-          Estado:'Pendiente',
-          Modulos_solicitados: modulosElegidos
+          Estado:'Pendiente'
         }})
       })
       if(!r.ok) throw new Error('Error registrando video')
@@ -110,6 +108,8 @@ xhr.send(file)
       setError(e.message); setStep('error')
     }
   }
+
+
 
   const C = {
     wrap:{display:'flex',height:'100vh',overflow:'hidden',position:'relative' as const,zIndex:1},
@@ -301,7 +301,7 @@ xhr.send(file)
               {step==='uploading'&&(
                 <div style={{textAlign:'center',padding:'32px 0'}}>
                   <div style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid var(--b)',borderTop:'2px solid var(--c)',margin:'0 auto 20px',animation:'spin 1s linear infinite'}}/>
-                  <h3 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'18px',fontWeight:700,marginBottom:'8px'}}>Subiendo video...</h3>
+                  <h3 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'18px',fontWeight:700,marginBottom:'8px'}}>Enviando al Motor GISTO...</h3>
                   <div style={{height:'5px',background:'rgba(0,168,232,.1)',borderRadius:'3px',overflow:'hidden',margin:'12px 0'}}>
                     <div style={{height:'100%',width:`${progreso}%`,background:'linear-gradient(90deg,var(--c),var(--c2))',transition:'width .3s',boxShadow:'0 0 8px var(--c)'}}/>
                   </div>
@@ -362,8 +362,8 @@ xhr.send(file)
                 {error&&<div style={{padding:'12px 16px',borderRadius:'10px',fontSize:'13px',marginBottom:'16px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)'}}>⚠️ {error}</div>}
 
                 <button onClick={handleAnalizar} style={C.btn}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  Analizar video
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                  Procesar con Motor GISTO
                 </button>
                 <div style={C.proofRow}>
                   {['Sin tarjeta','Análisis en ~30 seg','Video limpio profesional'].map(t=>(
