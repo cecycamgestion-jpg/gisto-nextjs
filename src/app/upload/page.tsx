@@ -93,6 +93,33 @@ export default function Upload() {
 
   async function guardarYProcesar(vUrl: string) {
     try {
+      // Verificar creditos del usuario
+      const userStr = localStorage.getItem('gisto_user')
+      if (!userStr) { setError('Debes iniciar sesión'); setStep('error'); return }
+      const userData = JSON.parse(userStr)
+      const creditos = userData.creditos || 0
+
+      // Obtener duracion del video para validar creditos
+      let duracionMin = 0
+      try {
+        const analisisR = await fetch(`${RAILWAY_URL}/analizar-video`, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({video_url: vUrl})
+        })
+        if (analisisR.ok) {
+          const analisis = await analisisR.json()
+          duracionMin = analisis.duracion_minutos || 0
+        }
+      } catch { /* si falla el analisis, continuar sin validar duracion */ }
+
+      // Validar si tiene creditos suficientes
+      if (duracionMin > 0 && creditos < duracionMin) {
+        setError(`Tu video dura ${Math.round(duracionMin)} min pero solo tienes ${creditos} min de crédito. Adquiere más créditos.`)
+        setStep('error')
+        return
+      }
+
       const r = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos`,{
         method:'POST',
         headers:{'Authorization':`Bearer ${AIRTABLE_KEY}`,'Content-Type':'application/json'},
@@ -371,7 +398,12 @@ export default function Upload() {
                   </div>
                 </div>
 
-              {error&&<div style={{padding:'12px 16px',borderRadius:'10px',fontSize:'13px',marginBottom:'16px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)'}}>⚠️ {error}</div>}
+              {error&&(
+                  <div style={{padding:'12px 16px',borderRadius:'10px',fontSize:'13px',marginBottom:'16px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)',display:'flex',alignItems:'flex-start',gap:'8px',flexWrap:'wrap' as const}}>
+                    <span>⚠️ {error}</span>
+                    {error.includes('crédito')&&<a href="/planes" style={{color:'var(--c)',textDecoration:'none',fontWeight:700,marginLeft:'4px'}}>Ver planes →</a>}
+                  </div>
+                )}
 
                 <button onClick={handleAnalizar} style={C.btn}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
