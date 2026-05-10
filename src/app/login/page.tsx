@@ -51,8 +51,8 @@ export default function Login() {
         const user = await buscarUsuario(email)
         if (!user) { setError('No existe una cuenta con ese email'); setLoading(false); return }
         if (user.fields.Password !== password) { setError('Contraseña incorrecta'); setLoading(false); return }
-document.cookie = `gisto_session=active; path=/; max-age=${60*60*24*7}`        
-localStorage.setItem('gisto_user', JSON.stringify({
+        document.cookie = `gisto_session=active; path=/; max-age=${60*60*24*7}`        
+        localStorage.setItem('gisto_user', JSON.stringify({
           id: user.id,
           email: user.fields.Email,
           nombre: user.fields.Nombre || email.split('@')[0],
@@ -65,8 +65,15 @@ localStorage.setItem('gisto_user', JSON.stringify({
         if (existing) { setError('Ya existe una cuenta con ese email'); setLoading(false); return }
         const newUser = await crearUsuario(email, nombre, password)
         if (!newUser.id) { setError('Error creando cuenta'); setLoading(false); return }
-document.cookie = `gisto_session=active; path=/; max-age=${60*60*24*7}`        
-localStorage.setItem('gisto_user', JSON.stringify({
+        document.cookie = `gisto_session=active; path=/; max-age=${60*60*24*7}`        
+        
+        await fetch('/api/email/bienvenida', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({email, nombre})
+        })
+
+        localStorage.setItem('gisto_user', JSON.stringify({
           id: newUser.id,
           email,
           nombre,
@@ -84,7 +91,6 @@ localStorage.setItem('gisto_user', JSON.stringify({
   return (
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px',position:'relative' as const,zIndex:1}}>
       <div style={{width:'100%',maxWidth:'420px'}}>
-        {/* LOGO */}
         <div style={{textAlign:'center',marginBottom:'32px'}}>
           <Link href="https://www.thegisto.com" style={{display:'inline-flex',alignItems:'center',gap:'10px',textDecoration:'none',marginBottom:'8px'}}>
             <img src="/isotipo.png" alt="GISTO" style={{height:'52px',filter:'brightness(1.3) drop-shadow(0 0 8px rgba(0,168,232,0.5))'}}/>
@@ -97,11 +103,9 @@ localStorage.setItem('gisto_user', JSON.stringify({
           </p>
         </div>
 
-        {/* CARD */}
         <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'20px',overflow:'hidden',boxShadow:'0 24px 48px rgba(0,0,0,.3)'}}>
           <div style={{height:'2px',background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)'}}/>
           <div style={{padding:'28px'}}>
-            {/* TABS */}
             <div style={{display:'flex',gap:'3px',background:'var(--s2)',padding:'3px',borderRadius:'11px',marginBottom:'24px'}}>
               {(['login','register'] as const).map(m=>(
                 <button key={m} onClick={()=>{setMode(m);setError('')}} style={{flex:1,padding:'10px',borderRadius:'9px',border:'none',cursor:'pointer',fontSize:'14px',fontWeight:600,transition:'all .2s',background:mode===m?'var(--c)':'transparent',color:mode===m?'#000':'var(--t2)'}}>
@@ -110,7 +114,6 @@ localStorage.setItem('gisto_user', JSON.stringify({
               ))}
             </div>
 
-            {/* FIELDS */}
             <div style={{display:'flex',flexDirection:'column' as const,gap:'12px',marginBottom:'20px'}}>
               {mode==='register'&&(
                 <div>
