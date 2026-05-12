@@ -29,25 +29,23 @@ function AnimatedProgress({createdAt}: {createdAt: string}) {
 
   React.useEffect(() => {
     const created = new Date(createdAt).getTime()
-    const totalMs = 15 * 60 * 1000 // 15 min estimado
-    
+    const totalMs = 15 * 60 * 1000
+
     const interval = setInterval(() => {
       const elapsed = Date.now() - created
       setMsgIdx(Math.floor(elapsed / 20000) % PROGRESS_MESSAGES.length)
     }, 1000)
-    
+
     return () => clearInterval(interval)
   }, [createdAt])
 
   return (
     <div style={{padding:'0 16px 16px'}}>
       <div style={{background:'var(--s2)',borderRadius:'10px',padding:'16px',border:'1px solid rgba(255,176,32,.15)'}}>
-        {/* Message */}
         <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'12px'}}>
           <span style={{width:'7px',height:'7px',borderRadius:'50%',background:'var(--warn)',boxShadow:'0 0 8px var(--warn)',flexShrink:0,animation:'pulse 1s infinite',display:'inline-block'}}/>
           <span style={{fontSize:'13px',fontWeight:600,color:'var(--warn)'}}>{PROGRESS_MESSAGES[msgIdx]}</span>
         </div>
-        {/* Barra indeterminada - loop infinito */}
         <div style={{height:'4px',background:'rgba(255,255,255,.06)',borderRadius:'2px',overflow:'hidden',marginBottom:'14px',position:'relative' as const}}>
           <div style={{
             position:'absolute' as const,
@@ -59,7 +57,6 @@ function AnimatedProgress({createdAt}: {createdAt: string}) {
             boxShadow:'0 0 12px rgba(0,168,232,.6)'
           }}/>
         </div>
-
       </div>
     </div>
   )
@@ -70,16 +67,14 @@ function getStageIndex(estado: string, createdAt: string) {
   if(e === 'completado') return 5
   if(e === 'pendiente') return 0
   if(e === 'procesando') {
-    // Animar progreso basado en tiempo transcurrido
-    // Cada etapa dura ~3 minutos en promedio
     const created = new Date(createdAt).getTime()
     const now = Date.now()
     const minutos = (now - created) / 60000
-    if(minutos < 2) return 1   // Transcripcion
-    if(minutos < 5) return 2   // Analisis IA
-    if(minutos < 8) return 3   // Limpieza
-    if(minutos < 11) return 4  // Corte anatomico
-    return 4                    // Empaquetando
+    if(minutos < 2) return 1
+    if(minutos < 5) return 2
+    if(minutos < 8) return 3
+    if(minutos < 11) return 4
+    return 4
   }
   return 0
 }
@@ -92,6 +87,18 @@ export default function Dashboard() {
   const [creditos, setCreditos] = useState(0)
   const [creditosMax, setCreditosMax] = useState(20)
 
+  // ─── NUEVO: estado sidebar móvil ───
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+  // ────────────────────────────────────
+
   const fetchVideos = useCallback(async () => {
     try {
       const userEmail = JSON.parse(localStorage.getItem('gisto_user')||'{}').email || ''
@@ -101,7 +108,6 @@ export default function Dashboard() {
         {headers: {'Authorization': `Bearer ${AIRTABLE_KEY}`}}
       )
       const data = await r.json()
-      // Ordenar por fecha de creación (más reciente primero)
       const sorted = (data.records || []).sort((a:any, b:any) => {
         const da = new Date(a.fields?.['Created time'] || a.createdTime || 0).getTime()
         const db = new Date(b.fields?.['Created time'] || b.createdTime || 0).getTime()
@@ -115,12 +121,10 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    // Cargar usuario desde localStorage
     const u = localStorage.getItem('gisto_user')
     if (u) {
       const parsed = JSON.parse(u)
       setUser(parsed)
-      // Obtener creditos reales de Airtable
       fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios/${parsed.id}`, {
         headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}` }
       })
@@ -128,11 +132,9 @@ export default function Dashboard() {
       .then(data => {
         const cred = data.fields?.creditos_minutos || 0
         setCreditos(cred)
-        // Max creditos segun plan
         const plan = data.fields?.plan || 'Free'
         const maxMap: any = { 'Free': 20, 'Starter': 120, 'Profesional': 480, 'Academia': 1200, 'Pack Evento': 480 }
         setCreditosMax(maxMap[plan] || 20)
-        // Actualizar localStorage
         const updated = { ...parsed, creditos: cred, plan }
         localStorage.setItem('gisto_user', JSON.stringify(updated))
       })
@@ -176,18 +178,80 @@ export default function Dashboard() {
     return `Hace ${days}d`
   }
 
+  // ─── ESTILOS ───────────────────────────────────────────────────────────────
   const S = {
-    wrap:{display:'flex',height:'100vh',overflow:'hidden',position:'relative' as const,zIndex:1},
-    sidebar:{width:'260px',background:'var(--s1)',borderRight:'1px solid var(--b)',padding:'20px 16px',display:'flex',flexDirection:'column' as const,flexShrink:0},
-    main:{flex:1,overflow:'auto',display:'flex',flexDirection:'column' as const},
+    wrap: {
+      display:'flex',
+      height:'100vh',
+      overflow:'hidden',
+      position:'relative' as const,
+      zIndex:1,
+    },
+
+    // Overlay oscuro detrás del sidebar en móvil
+    overlay: {
+      display: isMobile && sidebarOpen ? 'block' : 'none',
+      position:'fixed' as const,
+      inset:0,
+      background:'rgba(0,0,0,.6)',
+      zIndex:99,
+      cursor:'pointer',
+    },
+
+    sidebar: {
+      width:'260px',
+      background:'var(--s1)',
+      borderRight:'1px solid var(--b)',
+      padding:'20px 16px',
+      display:'flex',
+      flexDirection:'column' as const,
+      flexShrink:0,
+      // En móvil: fixed + slide
+      ...(isMobile ? {
+        position:'fixed' as const,
+        top:0,
+        left:0,
+        bottom:0,
+        zIndex:100,
+        transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition:'transform .3s ease',
+        boxShadow: sidebarOpen ? '4px 0 32px rgba(0,0,0,.6)' : 'none',
+      } : {
+        position:'relative' as const,
+      }),
+    },
+
+    // Botón hamburguesa — solo visible en móvil
+    hamburger: {
+      display: isMobile ? 'flex' : 'none',
+      alignItems:'center' as const,
+      justifyContent:'center' as const,
+      background:'rgba(255,255,255,.06)',
+      border:'1px solid var(--b)',
+      borderRadius:'8px',
+      color:'var(--t1)',
+      padding:'8px',
+      cursor:'pointer',
+      marginRight:'4px',
+      flexShrink:0,
+    },
+
+    main:{flex:1,overflow:'auto',display:'flex',flexDirection:'column' as const,minWidth:0},
     topbar:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 28px',borderBottom:'1px solid var(--b)',background:'rgba(6,8,16,.7)',backdropFilter:'blur(12px)',position:'sticky' as const,top:0,zIndex:50,flexShrink:0},
     content:{padding:'24px 28px',flex:1},
     statGrid:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'14px',marginBottom:'24px'},
     statCard:{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'14px',padding:'18px',transition:'.2s'},
   }
+  // ──────────────────────────────────────────────────────────────────────────
+
+  const closeSidebar = () => setSidebarOpen(false)
 
   const NavItem = ({href,label,icon,active,badge}:{href:string,label:string,icon:string,active:boolean,badge?:number}) => (
-    <Link href={href} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',color:active?'var(--t1)':'var(--t2)',textDecoration:'none',borderRadius:'9px',marginBottom:'2px',fontSize:'14px',fontWeight:500,background:active?'rgba(0,168,232,0.08)':'transparent',border:active?'1px solid var(--b)':'1px solid transparent'}}>
+    <Link
+      href={href}
+      onClick={() => isMobile && closeSidebar()}
+      style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',color:active?'var(--t1)':'var(--t2)',textDecoration:'none',borderRadius:'9px',marginBottom:'2px',fontSize:'14px',fontWeight:500,background:active?'rgba(0,168,232,0.08)':'transparent',border:active?'1px solid var(--b)':'1px solid transparent'}}
+    >
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={active?'var(--c)':'var(--t3)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={icon}/></svg>
       {label}
       {badge ? <span style={{marginLeft:'auto',background:'var(--c)',color:'#000',fontSize:'10px',fontWeight:800,padding:'1px 7px',borderRadius:'100px'}}>{badge}</span> : null}
@@ -196,6 +260,11 @@ export default function Dashboard() {
 
   return (
     <div style={S.wrap}>
+
+      {/* OVERLAY MÓVIL — clic cierra sidebar */}
+      <div style={S.overlay} onClick={closeSidebar} />
+
+      {/* SIDEBAR */}
       <aside style={S.sidebar}>
         <Link href="/" style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none',padding:'4px 8px',marginBottom:'36px'}}>
           <img src="/isotipo.png" alt="GISTO" style={{height:'34px'}}/>
@@ -215,23 +284,38 @@ export default function Dashboard() {
             <strong style={{color:'var(--c)'}}>{creditos} min</strong><span>/ {creditosMax} min</span>
           </div>
         </div>
-        <Link href="/perfil" style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 12px 0',borderTop:'1px solid var(--b)',marginTop:'12px',textDecoration:'none',cursor:'pointer'}}>
+
+        <Link href="/perfil" onClick={() => isMobile && closeSidebar()} style={{display:'flex',alignItems:'center',gap:'10px',padding:'14px 12px 0',borderTop:'1px solid var(--b)',marginTop:'12px',textDecoration:'none',cursor:'pointer'}}>
           <div style={{width:'32px',height:'32px',borderRadius:'50%',background:'linear-gradient(135deg,var(--c),var(--c2))',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:800,fontSize:'13px',color:'#000',flexShrink:0}}>{user?.nombre?.[0]?.toUpperCase()||'U'}</div>
           <div><div style={{fontSize:'13px',fontWeight:700}}>{user?.nombre||'Usuario'}</div><div style={{fontSize:'11px',color:'var(--t2)'}}>{user?.plan||'Plan Gratuito'}</div></div>
         </Link>
       </aside>
 
+      {/* CONTENIDO PRINCIPAL */}
       <main style={S.main}>
         <div style={S.topbar}>
-          <div>
-            <h1 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'20px',fontWeight:800,letterSpacing:'-.5px'}}>Dashboard</h1>
-            <p style={{fontSize:'12px',color:'var(--t2)',marginTop:'1px',display:'flex',alignItems:'center',gap:'6px'}}>
-              {hayProcesando && <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'var(--warn)',boxShadow:'0 0 6px var(--warn)',display:'inline-block',animation:'pulse 1.5s infinite'}}/>}
-              {hayProcesando ? 'Motor GISTO procesando...' : 'Todo al día'}
-            </p>
+          <div style={{display:'flex',alignItems:'center'}}>
+            {/* BOTÓN HAMBURGUESA */}
+            <button
+              style={S.hamburger}
+              onClick={() => setSidebarOpen(v => !v)}
+              aria-label="Abrir menú"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            </button>
+            <div>
+              <h1 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'20px',fontWeight:800,letterSpacing:'-.5px'}}>Dashboard</h1>
+              <p style={{fontSize:'12px',color:'var(--t2)',marginTop:'1px',display:'flex',alignItems:'center',gap:'6px'}}>
+                {hayProcesando && <span style={{width:'6px',height:'6px',borderRadius:'50%',background:'var(--warn)',boxShadow:'0 0 6px var(--warn)',display:'inline-block',animation:'pulse 1.5s infinite'}}/>}
+                {hayProcesando ? 'Motor GISTO procesando...' : 'Todo al día'}
+              </p>
+            </div>
           </div>
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-
             <Link href="/upload" style={{display:'inline-flex',alignItems:'center',gap:'6px',background:'var(--c)',color:'#000',padding:'9px 16px',borderRadius:'8px',fontWeight:700,fontSize:'13px',textDecoration:'none'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
               Nuevo video
@@ -306,7 +390,6 @@ export default function Dashboard() {
 
             return (
               <div key={v.id} style={{background:'var(--s1)',border:`1px solid ${processing?'rgba(255,176,32,.2)':done?'rgba(0,229,160,.15)':'var(--b)'}`,borderRadius:'14px',marginBottom:'10px',overflow:'hidden',transition:'.3s'}}>
-                {/* HEADER ROW */}
                 <div style={{display:'flex',alignItems:'center',gap:'14px',padding:'14px 16px'}}>
                   <div style={{width:'48px',height:'36px',background:done?'rgba(0,229,160,.06)':processing?'rgba(255,176,32,.06)':'var(--s2)',border:`1px solid ${done?'rgba(0,229,160,.15)':processing?'rgba(255,176,32,.15)':'var(--b)'}`,borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={done?'var(--ok)':processing?'var(--warn)':'var(--t3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
@@ -334,12 +417,10 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                {/* MOTOR STAGES - animacion en tiempo real */}
                 {processing && (
                   <AnimatedProgress createdAt={v.fields?.['Created time'] || v.createdTime || new Date().toISOString()} />
                 )}
 
-                {/* RESULTADO - cuando está completado */}
                 {done&&(
                   <div style={{padding:'0 16px 14px',display:'flex',gap:'8px',flexWrap:'wrap' as const}}>
                     {[
@@ -359,7 +440,19 @@ export default function Dashboard() {
           })}
         </div>
       </main>
-      <style>{`@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}} @keyframes shimmer{0%{background-position:0%}100%{background-position:200%}} @keyframes indeterminate{0%{left:-40%;right:100%}60%{left:100%;right:-40%}100%{left:100%;right:-40%}}`}</style>
+
+      <style>{`
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+        @keyframes shimmer{0%{background-position:0%}100%{background-position:200%}}
+        @keyframes indeterminate{0%{left:-40%;right:100%}60%{left:100%;right:-40%}100%{left:100%;right:-40%}}
+
+        /* Grid de stats: 2 columnas en móvil */
+        @media (max-width: 767px) {
+          .stat-grid-responsive {
+            grid-template-columns: repeat(2, 1fr) !important;
+          }
+        }
+      `}</style>
     </div>
   )
 }

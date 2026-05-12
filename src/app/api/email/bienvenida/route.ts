@@ -23,7 +23,9 @@ export async function POST(req: NextRequest) {
   <div style="background:#0C1018;border:1px solid rgba(0,168,232,0.14);border-radius:16px;overflow:hidden">
     <div style="height:3px;background:linear-gradient(90deg,#00A8E8,#00D4FF)"></div>
     <div style="padding:32px 28px;text-align:center">
-      <div style="font-size:48px;margin-bottom:16px">🦋</div>
+      <div style="margin-bottom:16px">
+  <img src="https://www.thegisto.com/isotipo.png" alt="GISTO" width="64" height="64" style="display:block;margin:0 auto" />
+</div>
       <h1 style="color:#F0F6FC;font-size:24px;font-weight:800;margin:0 0 8px;letter-spacing:-0.5px">¡Hola ${nombre}!</h1>
       <p style="color:rgba(240,246,252,0.55);font-size:15px;margin:0 0 24px;line-height:1.6">
         Tu cuenta está lista. Tienes <strong style="color:#00A8E8">20 minutos de crédito gratuito</strong> para probar GISTO.
