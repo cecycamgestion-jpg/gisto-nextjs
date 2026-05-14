@@ -28,14 +28,10 @@ function AnimatedProgress({createdAt}: {createdAt: string}) {
   const [msgIdx, setMsgIdx] = React.useState(0)
 
   React.useEffect(() => {
-    const created = new Date(createdAt).getTime()
-    const totalMs = 15 * 60 * 1000
-
     const interval = setInterval(() => {
-      const elapsed = Date.now() - created
+      const elapsed = Date.now() - new Date(createdAt).getTime()
       setMsgIdx(Math.floor(elapsed / 20000) % PROGRESS_MESSAGES.length)
     }, 1000)
-
     return () => clearInterval(interval)
   }, [createdAt])
 
@@ -67,9 +63,7 @@ function getStageIndex(estado: string, createdAt: string) {
   if(e === 'completado') return 5
   if(e === 'pendiente') return 0
   if(e === 'procesando') {
-    const created = new Date(createdAt).getTime()
-    const now = Date.now()
-    const minutos = (now - created) / 60000
+    const minutos = (Date.now() - new Date(createdAt).getTime()) / 60000
     if(minutos < 2) return 1
     if(minutos < 5) return 2
     if(minutos < 8) return 3
@@ -85,19 +79,20 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [creditos, setCreditos] = useState(0)
-  const [creditosMax, setCreditosMax] = useState(20)
+  const [creditosMax, setCreditosMax] = useState(40)
 
-  // ─── NUEVO: estado sidebar móvil ───
+  // ─── FIX MÓVIL: inicializar con el ancho real desde el primer render ───
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [isMobile, setIsMobile] = useState(false)
+  const [isMobile, setIsMobile] = useState(
+    typeof window !== 'undefined' ? window.innerWidth < 768 : false
+  )
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
-    check()
     window.addEventListener('resize', check)
     return () => window.removeEventListener('resize', check)
   }, [])
-  // ────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────
 
   const fetchVideos = useCallback(async () => {
     try {
@@ -133,8 +128,8 @@ export default function Dashboard() {
         const cred = data.fields?.creditos_minutos || 0
         setCreditos(cred)
         const plan = data.fields?.plan || 'Free'
-        const maxMap: any = { 'Free': 20, 'Starter': 120, 'Profesional': 480, 'Academia': 1200, 'Pack Evento': 480 }
-        setCreditosMax(maxMap[plan] || 20)
+        const maxMap: any = { 'Free': 40, 'Starter': 120, 'Profesional': 480, 'Academia': 1200, 'Pack Evento': 480 }
+        setCreditosMax(maxMap[plan] || 40)
         const updated = { ...parsed, creditos: cred, plan }
         localStorage.setItem('gisto_user', JSON.stringify(updated))
       })
@@ -157,7 +152,6 @@ export default function Dashboard() {
     return true
   })
 
-  const completados = videos.filter(v => v.fields?.Estado === 'Completado').length
   const modulos = videos.reduce((a,v) => a + (v.fields?.Modulos_detectados || 0), 0)
   const enProceso = videos.filter(v => {
     const e = v.fields?.Estado?.toLowerCase()
@@ -167,8 +161,7 @@ export default function Dashboard() {
   function formatFecha(record: any) {
     const d = new Date(record.fields?.['Created time'] || record.createdTime)
     if(isNaN(d.getTime())) return ''
-    const now = new Date()
-    const diff = now.getTime() - d.getTime()
+    const diff = Date.now() - d.getTime()
     const mins = Math.floor(diff/60000)
     const hrs = Math.floor(mins/60)
     const days = Math.floor(hrs/24)
@@ -178,7 +171,6 @@ export default function Dashboard() {
     return `Hace ${days}d`
   }
 
-  // ─── ESTILOS ───────────────────────────────────────────────────────────────
   const S = {
     wrap: {
       display:'flex',
@@ -187,8 +179,6 @@ export default function Dashboard() {
       position:'relative' as const,
       zIndex:1,
     },
-
-    // Overlay oscuro detrás del sidebar en móvil
     overlay: {
       display: isMobile && sidebarOpen ? 'block' : 'none',
       position:'fixed' as const,
@@ -197,7 +187,6 @@ export default function Dashboard() {
       zIndex:99,
       cursor:'pointer',
     },
-
     sidebar: {
       width:'260px',
       background:'var(--s1)',
@@ -206,7 +195,6 @@ export default function Dashboard() {
       display:'flex',
       flexDirection:'column' as const,
       flexShrink:0,
-      // En móvil: fixed + slide
       ...(isMobile ? {
         position:'fixed' as const,
         top:0,
@@ -220,8 +208,6 @@ export default function Dashboard() {
         position:'relative' as const,
       }),
     },
-
-    // Botón hamburguesa — solo visible en móvil
     hamburger: {
       display: isMobile ? 'flex' : 'none',
       alignItems:'center' as const,
@@ -232,17 +218,16 @@ export default function Dashboard() {
       color:'var(--t1)',
       padding:'8px',
       cursor:'pointer',
-      marginRight:'4px',
+      marginRight:'8px',
       flexShrink:0,
     },
-
     main:{flex:1,overflow:'auto',display:'flex',flexDirection:'column' as const,minWidth:0},
-    topbar:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 28px',borderBottom:'1px solid var(--b)',background:'rgba(6,8,16,.7)',backdropFilter:'blur(12px)',position:'sticky' as const,top:0,zIndex:50,flexShrink:0},
-    content:{padding:'24px 28px',flex:1},
-    statGrid:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'14px',marginBottom:'24px'},
+    topbar:{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px',borderBottom:'1px solid var(--b)',background:'rgba(6,8,16,.7)',backdropFilter:'blur(12px)',position:'sticky' as const,top:0,zIndex:50,flexShrink:0},
+    content:{padding: isMobile ? '16px' : '24px 28px', flex:1},
+    // ─── FIX: 2 columnas en móvil, 4 en desktop ───
+    statGrid:{display:'grid',gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)',gap:'14px',marginBottom:'24px'},
     statCard:{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'14px',padding:'18px',transition:'.2s'},
   }
-  // ──────────────────────────────────────────────────────────────────────────
 
   const closeSidebar = () => setSidebarOpen(false)
 
@@ -261,10 +246,8 @@ export default function Dashboard() {
   return (
     <div style={S.wrap}>
 
-      {/* OVERLAY MÓVIL — clic cierra sidebar */}
       <div style={S.overlay} onClick={closeSidebar} />
 
-      {/* SIDEBAR */}
       <aside style={S.sidebar}>
         <Link href="/" style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none',padding:'4px 8px',marginBottom:'36px'}}>
           <img src="/isotipo.png" alt="GISTO" style={{height:'34px'}}/>
@@ -291,16 +274,10 @@ export default function Dashboard() {
         </Link>
       </aside>
 
-      {/* CONTENIDO PRINCIPAL */}
       <main style={S.main}>
         <div style={S.topbar}>
           <div style={{display:'flex',alignItems:'center'}}>
-            {/* BOTÓN HAMBURGUESA */}
-            <button
-              style={S.hamburger}
-              onClick={() => setSidebarOpen(v => !v)}
-              aria-label="Abrir menú"
-            >
+            <button style={S.hamburger} onClick={() => setSidebarOpen(v => !v)} aria-label="Abrir menú">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="6" x2="21" y2="6"/>
                 <line x1="3" y1="12" x2="21" y2="12"/>
@@ -318,13 +295,12 @@ export default function Dashboard() {
           <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
             <Link href="/upload" style={{display:'inline-flex',alignItems:'center',gap:'6px',background:'var(--c)',color:'#000',padding:'9px 16px',borderRadius:'8px',fontWeight:700,fontSize:'13px',textDecoration:'none'}}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Nuevo video
+              {isMobile ? 'Nuevo' : 'Nuevo video'}
             </Link>
           </div>
         </div>
 
         <div style={S.content}>
-          {/* STATS */}
           <div style={S.statGrid}>
             {[
               {label:'Créditos',val:`${creditos} min`,badge:user?.plan||'Free',bc:'var(--warn)',icon:'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2'},
@@ -345,7 +321,6 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* UPLOAD ZONE */}
           <Link href="/upload" style={{display:'flex',alignItems:'center',gap:'20px',background:'rgba(0,168,232,.03)',border:'1.5px dashed rgba(0,168,232,.2)',borderRadius:'14px',padding:'20px 24px',marginBottom:'24px',textDecoration:'none',flexWrap:'wrap' as const,transition:'.3s'}}>
             <div style={{width:'48px',height:'48px',background:'rgba(0,168,232,.1)',borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--c)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
@@ -357,7 +332,6 @@ export default function Dashboard() {
             <span style={{background:'var(--c)',color:'#000',padding:'9px 20px',borderRadius:'8px',fontSize:'13px',fontWeight:700}}>Subir →</span>
           </Link>
 
-          {/* LIST HEADER */}
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'14px',flexWrap:'wrap' as const,gap:'12px'}}>
             <div>
               <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'16px',fontWeight:700}}>Mis videos</div>
@@ -386,7 +360,6 @@ export default function Dashboard() {
             const estado = f.Estado || 'Pendiente'
             const done = estado === 'Completado'
             const processing = estado === 'Procesando' || estado === 'Pendiente'
-            const stageIdx = getStageIndex(estado, v.fields?.['Created time'] || v.createdTime || '')
 
             return (
               <div key={v.id} style={{background:'var(--s1)',border:`1px solid ${processing?'rgba(255,176,32,.2)':done?'rgba(0,229,160,.15)':'var(--b)'}`,borderRadius:'14px',marginBottom:'10px',overflow:'hidden',transition:'.3s'}}>
@@ -411,7 +384,7 @@ export default function Dashboard() {
                     {done&&f.Resultado&&(
                       <a href={f.Resultado} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'transparent',border:'1px solid var(--b)',color:'var(--t2)',padding:'6px 12px',borderRadius:'7px',fontSize:'12px',fontWeight:600,textDecoration:'none',transition:'.2s'}}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                        Descargar ZIP
+                        {isMobile ? 'ZIP' : 'Descargar ZIP'}
                       </a>
                     )}
                   </div>
@@ -445,13 +418,6 @@ export default function Dashboard() {
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
         @keyframes shimmer{0%{background-position:0%}100%{background-position:200%}}
         @keyframes indeterminate{0%{left:-40%;right:100%}60%{left:100%;right:-40%}100%{left:100%;right:-40%}}
-
-        /* Grid de stats: 2 columnas en móvil */
-        @media (max-width: 767px) {
-          .stat-grid-responsive {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
-        }
       `}</style>
     </div>
   )
