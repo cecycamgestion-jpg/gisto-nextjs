@@ -128,7 +128,7 @@ export default function Planes() {
           <div style={{background:'rgba(0,168,232,.05)',border:'1px solid var(--b)',borderRadius:'14px',padding:'20px 24px',marginTop:'24px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:'16px',flexWrap:'wrap' as const}}>
             <div>
               <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'17px',fontWeight:800,marginBottom:'3px'}}>¿Aún no probaste GISTO?</div>
-              <div style={{fontSize:'13px',color:'var(--t2)'}}>20 minutos gratis al registrarte. Sin tarjeta de crédito.</div>
+              <div style={{fontSize:'13px',color:'var(--t2)'}}>40 minutos gratis al registrarte. Sin tarjeta de crédito.</div>
             </div>
             <Link href="/upload" style={{background:'var(--c)',color:'#000',padding:'12px 24px',borderRadius:'9px',fontWeight:700,fontSize:'14px',textDecoration:'none'}}>
               Probar gratis →
