@@ -32,7 +32,7 @@ export default function Login() {
         Email: email,
         Nombre: nombre,
         Password: password,
-        creditos_minutos: 20,
+        creditos_minutos: 40,
         plan: 'Free'
       }})
     })
@@ -78,7 +78,7 @@ export default function Login() {
           email,
           nombre,
           plan: 'Free',
-          creditos: 20
+          creditos: 40
         }))
         router.push('/dashboard')
       }
@@ -152,7 +152,7 @@ export default function Login() {
 
             {mode==='register'&&(
               <p style={{textAlign:'center',fontSize:'12px',color:'var(--t3)',marginTop:'16px',lineHeight:1.6}}>
-                Al registrarte recibes <strong style={{color:'var(--c)'}}>20 minutos gratis</strong> para probar GISTO.
+                Al registrarte recibes <strong style={{color:'var(--c)'}}>40 minutos gratis</strong> para probar GISTO.
               </p>
             )}
           </div>
