@@ -8,14 +8,23 @@ const AIRTABLE_BASE = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
 const PAISES = ['Perú','México','Colombia','Argentina','Chile','Ecuador','Bolivia','Venezuela','España','Otro']
 
+// Máximo de créditos por plan — mismo mapa que dashboard
+const MAX_CREDITOS: any = {
+  'Free': 40, 'Starter': 120, 'Profesional': 480,
+  'Academia': 1200, 'Pack Evento': 480
+}
+
 export default function Perfil() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [nombre, setNombre] = useState('')
   const [pais, setPais] = useState('')
+  const [creditos, setCreditos] = useState(0)
+  const [creditosMax, setCreditosMax] = useState(40)
   const [pwActual, setPwActual] = useState('')
   const [pwNueva, setPwNueva] = useState('')
   const [loading, setLoading] = useState(false)
+  const [loadingCreditos, setLoadingCreditos] = useState(true)
   const [msg, setMsg] = useState('')
   const [msgType, setMsgType] = useState<'ok'|'err'>('ok')
 
@@ -26,6 +35,27 @@ export default function Perfil() {
     setUser(parsed)
     setNombre(parsed.nombre || '')
     setPais(parsed.pais || '')
+
+    // ── FIX: Refrescar créditos y plan REALES desde Airtable ──
+    fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios/${parsed.id}`, {
+      headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}` }
+    })
+    .then(r => r.json())
+    .then(data => {
+      const cred = data.fields?.creditos_minutos || 0
+      const plan = data.fields?.plan || 'Free'
+      setCreditos(cred)
+      setCreditosMax(MAX_CREDITOS[plan] || 40)
+      const updated = { ...parsed, creditos: cred, plan }
+      localStorage.setItem('gisto_user', JSON.stringify(updated))
+      setUser(updated)
+      setLoadingCreditos(false)
+    })
+    .catch(() => {
+      setCreditos(parsed.creditos || 0)
+      setCreditosMax(MAX_CREDITOS[parsed.plan] || 40)
+      setLoadingCreditos(false)
+    })
   }, [])
 
   function logout() {
@@ -46,7 +76,8 @@ export default function Perfil() {
       const updated = { ...user, nombre, pais }
       localStorage.setItem('gisto_user', JSON.stringify(updated))
       setUser(updated)
-      setMsg('Perfil actualizado correctamente'); setMsgType('ok')
+      setMsg('Perfil actualizado correctamente')
+      setMsgType('ok')
     } catch { setMsg('Error al guardar'); setMsgType('err') }
     setLoading(false)
   }
@@ -60,21 +91,33 @@ export default function Perfil() {
         headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}` }
       })
       const data = await r.json()
-      if (data.fields?.Password !== pwActual) { setMsg('Contraseña actual incorrecta'); setMsgType('err'); setLoading(false); return }
+      if (data.fields?.Password !== pwActual) {
+        setMsg('Contraseña actual incorrecta')
+        setMsgType('err')
+        setLoading(false)
+        return
+      }
       await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios/${user.id}`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ fields: { Password: pwNueva } })
       })
       setPwActual(''); setPwNueva('')
-      setMsg('Contraseña actualizada correctamente'); setMsgType('ok')
+      setMsg('Contraseña actualizada correctamente')
+      setMsgType('ok')
     } catch { setMsg('Error al cambiar contraseña'); setMsgType('err') }
     setLoading(false)
   }
 
   if (!user) return null
 
-  const planColors: any = { Free: 'var(--t2)', Starter: 'var(--c)', Profesional: 'var(--ok)', Academia: '#FFB020' }
+  const planColors: any = {
+    'Free': 'var(--t2)', 'Starter': 'var(--c)',
+    'Profesional': 'var(--ok)', 'Academia': '#FFB020', 'Pack Evento': 'var(--ok)'
+  }
+
+  // ── FIX: porcentaje dinámico basado en plan real ──
+  const porcentajeCreditos = Math.min(100, (creditos / creditosMax) * 100)
 
   return (
     <div style={{display:'flex',height:'100vh',overflow:'hidden',position:'relative' as const,zIndex:1}}>
@@ -110,23 +153,31 @@ export default function Perfil() {
           <h1 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'28px',fontWeight:900,letterSpacing:'-1px',marginBottom:'4px'}}>Mi perfil</h1>
           <p style={{fontSize:'14px',color:'var(--t2)',marginBottom:'32px'}}>Gestiona tu cuenta y créditos</p>
 
-          {/* PLAN & CREDITOS */}
+          {/* PLAN & CRÉDITOS — FIX: dinámico */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px',marginBottom:'28px'}}>
             <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'14px',padding:'20px'}}>
               <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'10px'}}>Plan actual</div>
-              <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'26px',fontWeight:900,color:planColors[user.plan]||'var(--c)'}}>{user.plan||'Free'}</div>
-              <Link href="/planes" style={{fontSize:'12px',color:'var(--c)',textDecoration:'none',display:'inline-block',marginTop:'6px'}}>Ver todos los planes →</Link>
+              <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'26px',fontWeight:900,color:planColors[user.plan]||'var(--c)'}}>
+                {user.plan||'Free'}
+              </div>
+              <Link href="/planes" style={{fontSize:'12px',color:'var(--c)',textDecoration:'none',display:'inline-block',marginTop:'6px'}}>
+                Ver todos los planes →
+              </Link>
             </div>
             <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'14px',padding:'20px'}}>
               <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'10px'}}>Créditos</div>
-              <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'26px',fontWeight:900,color:'var(--c)'}}>{user.creditos||0} <span style={{fontSize:'14px',fontWeight:400,color:'var(--t2)'}}>min</span></div>
+              <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'26px',fontWeight:900,color:'var(--c)'}}>
+                {loadingCreditos ? '...' : creditos}{' '}
+                <span style={{fontSize:'14px',fontWeight:400,color:'var(--t2)'}}>/ {creditosMax} min</span>
+              </div>
+              {/* FIX: barra dinámica basada en plan real */}
               <div style={{height:'5px',background:'rgba(0,168,232,.12)',borderRadius:'3px',overflow:'hidden',marginTop:'10px'}}>
-                <div style={{height:'100%',width:`${Math.min(100,(user.creditos||0)/20*100)}%`,background:'linear-gradient(90deg,var(--c),var(--c2))',borderRadius:'3px'}}/>
+                <div style={{height:'100%',width:`${porcentajeCreditos}%`,background:'linear-gradient(90deg,var(--c),var(--c2))',borderRadius:'3px',transition:'width .3s'}}/>
               </div>
             </div>
           </div>
 
-          {/* DATOS */}
+          {/* DATOS PERSONALES */}
           <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'16px',padding:'24px',marginBottom:'16px'}}>
             <div style={{height:'2px',background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)',margin:'-24px -24px 20px'}}/>
             <h2 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'16px',fontWeight:700,marginBottom:'18px'}}>Datos personales</h2>
@@ -147,7 +198,11 @@ export default function Perfil() {
                 {PAISES.map(p=><option key={p} value={p}>{p}</option>)}
               </select>
             </div>
-            {msg&&<div style={{padding:'10px 14px',borderRadius:'9px',fontSize:'13px',marginBottom:'14px',background:msgType==='ok'?'rgba(0,229,160,.08)':'rgba(255,70,100,.08)',border:`1px solid ${msgType==='ok'?'rgba(0,229,160,.2)':'rgba(255,70,100,.2)'}`,color:msgType==='ok'?'var(--ok)':'var(--err)'}}>{msgType==='ok'?'✓':''} {msg}</div>}
+            {msg&&(
+              <div style={{padding:'10px 14px',borderRadius:'9px',fontSize:'13px',marginBottom:'14px',background:msgType==='ok'?'rgba(0,229,160,.08)':'rgba(255,70,100,.08)',border:`1px solid ${msgType==='ok'?'rgba(0,229,160,.2)':'rgba(255,70,100,.2)'}`,color:msgType==='ok'?'var(--ok)':'var(--err)'}}>
+                {msgType==='ok'?'✓ ':''}{msg}
+              </div>
+            )}
             <button onClick={guardarPerfil} disabled={loading} style={{background:'var(--c)',color:'#000',border:'none',borderRadius:'9px',padding:'12px 24px',fontWeight:700,fontSize:'14px',cursor:'pointer',fontFamily:'inherit'}}>
               {loading?'Guardando...':'Guardar cambios'}
             </button>
@@ -170,6 +225,7 @@ export default function Perfil() {
               {loading?'Cambiando...':'Cambiar contraseña'}
             </button>
           </div>
+
         </div>
       </main>
       <style>{`input:focus,select:focus{border-color:var(--c)!important;box-shadow:0 0 0 3px rgba(0,168,232,.12);}`}</style>
