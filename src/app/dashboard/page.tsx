@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 const MAX_CREDITOS: any = {
-  'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200
+  'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200,'academia':1200
 }
 const PLAN_COLORS: any = {
   'Free':'var(--t2)','Starter':'var(--c)',
