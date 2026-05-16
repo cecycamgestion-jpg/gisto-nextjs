@@ -365,7 +365,7 @@ const data = await r.json()
                   <div style={{flex:1,minWidth:0}}>
                     <div style={{fontSize:'14px',fontWeight:600,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',marginBottom:'3px'}}>{f.VideoID||'Sin nombre'}</div>
                     <div style={{fontSize:'11px',color:'var(--t2)',display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap' as const}}>
-                      {f['Duración']&&<span>{Math.floor(f['Duración']/60)}m {Math.round(f['Duración']%60)}s</span>}
+                      {f['Duración']&&<span>{Math.floor((f['Duracion_entregada']||f['Duración']||0)/60)}m {Math.round((f['Duracion_entregada']||f['Duración']||0)%60)}s</span>}
                       {f.Modulos_detectados&&<><span style={{color:'var(--t3)'}}>·</span><span>{f.Modulos_detectados} módulos</span></>}
                       {f.Modulos_solicitados&&!f.Modulos_detectados&&<><span style={{color:'var(--t3)'}}>·</span><span>{f.Modulos_solicitados} módulos pedidos</span></>}
                       <span style={{color:'var(--t3)'}}>·</span>
