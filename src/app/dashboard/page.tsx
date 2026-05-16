@@ -98,11 +98,8 @@ export default function Dashboard() {
     try {
       const userEmail = JSON.parse(localStorage.getItem('gisto_user')||'{}').email || ''
       const filter = userEmail ? `&filterByFormula=${encodeURIComponent(`{Usuario_Email}="${userEmail}"`)}` : ''
-      const r = await fetch(
-        `https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos?maxRecords=50${filter}`,
-        {headers: {'Authorization': `Bearer ${AIRTABLE_KEY}`}}
-      )
-      const data = await r.json()
+     const r = await fetch('/api/airtable/videos')
+const data = await r.json()
       const sorted = (data.records || []).sort((a:any, b:any) => {
         const da = new Date(a.fields?.['Created time'] || a.createdTime || 0).getTime()
         const db = new Date(b.fields?.['Created time'] || b.createdTime || 0).getTime()
@@ -120,9 +117,7 @@ export default function Dashboard() {
     if (u) {
       const parsed = JSON.parse(u)
       setUser(parsed)
-      fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios/${parsed.id}`, {
-        headers: { 'Authorization': `Bearer ${AIRTABLE_KEY}` }
-      })
+      fetch('/api/airtable/usuario')
       .then(r => r.json())
       .then(data => {
         const cred = data.fields?.creditos_minutos || 0
@@ -382,7 +377,7 @@ export default function Dashboard() {
                       {estado}
                     </span>
                     {done&&f.Resultado&&(
-                      <a href={f.Resultado} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'transparent',border:'1px solid var(--b)',color:'var(--t2)',padding:'6px 12px',borderRadius:'7px',fontSize:'12px',fontWeight:600,textDecoration:'none',transition:'.2s'}}>
+                      <a href="#" onClick={async(e)=>{e.preventDefault();const r=await fetch('/api/download',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zip_key:f.Zip_Key||f.Resultado})});const d=await r.json();if(d.download_url)window.open(d.download_url,'_blank')}} style={{display:'inline-flex',alignItems:'center',gap:'5px',background:'transparent',border:'1px solid var(--b)',color:'var(--t2)',padding:'6px 12px',borderRadius:'7px',fontSize:'12px',fontWeight:600,textDecoration:'none',transition:'.2s'}}>
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                         {isMobile ? 'ZIP' : 'Descargar ZIP'}
                       </a>
