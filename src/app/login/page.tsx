@@ -148,9 +148,9 @@ export default function Login() {
                   </div>
                   <span style={{fontSize:'13px',color:'var(--t2)',lineHeight:1.5}}>
                     I agree to the{' '}
-                    <a href="https://www.thegisto.com/legal/terminos/" target="_blank" rel="noopener noreferrer" style={{color:'var(--c)',textDecoration:'none',fontWeight:600}}>Terms of Service</a>
+                    <a href="https://thegisto.com/legal/terminos/" target="_blank" rel="noopener noreferrer" style={{color:'var(--c)',textDecoration:'none',fontWeight:600}}>Terms of Service</a>
                     {' '}and{' '}
-                    <a href="https://www.thegisto.com/legal/privacidad/" target="_blank" rel="noopener noreferrer" style={{color:'var(--c)',textDecoration:'none',fontWeight:600}}>Privacy Policy</a>
+                    <a href="https://thegisto.com/legal/privacidad/" target="_blank" rel="noopener noreferrer" style={{color:'var(--c)',textDecoration:'none',fontWeight:600}}>Privacy Policy</a>
                   </span>
                 </label>
               </div>
