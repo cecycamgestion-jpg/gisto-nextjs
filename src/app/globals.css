@@ -8,14 +8,25 @@
   --bg: #060810;
   --s1: #0C1018;
   --s2: #111820;
-  --b: rgba(0,168,232,0.14);
-  --b2: rgba(0,168,232,0.28);
+  --b: rgba(0,168,232,0.12);
+  --b2: rgba(0,168,232,0.25);
   --t1: #F0F6FC;
   --t2: rgba(240,246,252,0.55);
   --t3: rgba(240,246,252,0.28);
   --ok: #00E5A0;
   --warn: #FFB020;
   --err: #FF4664;
+
+  /* Botón primario — gradiente en vez de plano */
+  --btn-bg: linear-gradient(135deg, #00A8E8, #00D4FF);
+  --btn-bg-hover: linear-gradient(135deg, #00B8F8, #00E4FF);
+  --btn-shadow: 0 4px 20px rgba(0,168,232,0.35);
+  --btn-shadow-hover: 0 8px 32px rgba(0,168,232,0.55);
+
+  /* Iconos y acentos secundarios — más suaves */
+  --c-dim: rgba(0,168,232,0.6);
+  --c-subtle: rgba(0,168,232,0.35);
+  --c-ghost: rgba(0,168,232,0.08);
 }
 
 * {
@@ -85,3 +96,47 @@ body::before {
 .animate-fadeup-1 { animation: fadeUp 0.5s 0.1s both; }
 .animate-fadeup-2 { animation: fadeUp 0.5s 0.2s both; }
 .animate-fadeup-3 { animation: fadeUp 0.5s 0.3s both; }
+
+/* BOTONES PREMIUM */
+.btn-gisto {
+  background: var(--btn-bg);
+  color: #000;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Cabinet Grotesk', sans-serif;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: var(--btn-shadow);
+  position: relative;
+  overflow: hidden;
+}
+.btn-gisto::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
+  pointer-events: none;
+}
+.btn-gisto:hover {
+  background: var(--btn-bg-hover);
+  box-shadow: var(--btn-shadow-hover);
+  transform: translateY(-2px);
+}
+.btn-gisto:active {
+  transform: translateY(0);
+  box-shadow: var(--btn-shadow);
+}
+
+/* CARDS PREMIUM */
+.card-gisto {
+  background: var(--s1);
+  border: 1px solid var(--b);
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+.card-gisto:hover {
+  border-color: var(--c-subtle);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,168,232,0.1);
+  transform: translateY(-3px);
+}
