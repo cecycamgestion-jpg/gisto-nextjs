@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "jose": "^5.0.0",
     "airtable": "^0.12.2",
     "next": "16.2.6",
     "react": "19.2.4",
