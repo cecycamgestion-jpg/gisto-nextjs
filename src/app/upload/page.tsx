@@ -6,7 +6,7 @@ const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL
 const AIRTABLE_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
 const AIRTABLE_BASE = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
-type Step = 'form' | 'analyzing' | 'confirm' | 'uploading' | 'queued' | 'error'
+type Step = 'form' | 'analyzing' | 'uploading' | 'queued' | 'error'
 
 interface Analisis {
   duracion_texto: string
@@ -24,10 +24,23 @@ function getMimeType(file: File): string {
   const map: Record<string, string> = {
     mp4: 'video/mp4', mov: 'video/quicktime', avi: 'video/x-msvideo',
     mkv: 'video/x-matroska', webm: 'video/webm', wmv: 'video/x-ms-wmv',
-    flv: 'video/x-flv', m4v: 'video/x-m4v',
   }
   return map[ext || ''] || 'video/mp4'
 }
+
+const ENTREGABLES = [
+  {icon:'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z',label:'Cápsulas de video',desc:'Por concepto completo',color:'#E25C5C',bg:'rgba(226,92,92,.08)',border:'rgba(226,92,92,.18)'},
+  {icon:'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6',label:'Guía de estudio',desc:'Word editable con resumen',color:'#4A90D9',bg:'rgba(74,144,217,.08)',border:'rgba(74,144,217,.18)'},
+  {icon:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11',label:'Quiz multinivel',desc:'Básico, intermedio, avanzado',color:'#00E5A0',bg:'rgba(0,229,160,.08)',border:'rgba(0,229,160,.18)'},
+  {icon:'M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z',label:'Glosario técnico',desc:'Términos del contenido',color:'#00A8E8',bg:'rgba(0,168,232,.08)',border:'rgba(0,168,232,.18)'},
+  {icon:'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z',label:'Bibliografía APA',desc:'Con links oficiales',color:'#FFB020',bg:'rgba(255,176,32,.08)',border:'rgba(255,176,32,.18)'},
+  {icon:'M21 8l-8-5-8 5v10l8 5 8-5V8z',label:'ZIP para tu LMS',desc:'Moodle, Canvas, Hotmart',color:'#A078FF',bg:'rgba(160,120,255,.08)',border:'rgba(160,120,255,.18)'},
+]
+
+const BTN_GRAD = 'linear-gradient(135deg,#00A8E8,#00D4FF)'
+const BTN_GRAD_H = 'linear-gradient(135deg,#00B8F8,#00E4FF)'
+const BTN_SHADOW = '0 4px 20px rgba(0,168,232,0.35)'
+const BTN_SHADOW_H = '0 8px 32px rgba(0,168,232,0.55)'
 
 export default function Upload() {
   const [tab, setTab] = useState<'link'|'file'>('link')
@@ -35,12 +48,10 @@ export default function Upload() {
   const [nombre, setNombre] = useState('')
   const [archivo, setArchivo] = useState<File|null>(null)
   const [step, setStep] = useState<Step>('form')
-  const [analisis, setAnalisis] = useState<Analisis|null>(null)
-  const [modulosElegidos, setModulosElegidos] = useState(0)
   const [progreso, setProgreso] = useState(0)
   const [error, setError] = useState('')
   const [drag, setDrag] = useState(false)
-  const [videoUrl, setVideoUrl] = useState('')
+  const [btnHover, setBtnHover] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const onDrop = useCallback((e:React.DragEvent)=>{
@@ -49,30 +60,10 @@ export default function Upload() {
     if(f?.type.startsWith('video/')) setArchivo(f)
   },[])
 
-  async function analizarVideo(vUrl: string) {
-    setStep('analyzing')
-    try {
-      const r = await fetch(`${RAILWAY_URL}/analizar-video`, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({video_url: vUrl})
-      })
-      if(!r.ok) throw new Error('No se pudo analizar el video')
-      const data = await r.json()
-      setAnalisis(data)
-      setModulosElegidos(data.modulos_sugeridos)
-      setStep('confirm')
-    } catch(e:any) {
-      setError(e.message)
-      setStep('error')
-    }
-  }
-
   async function subirS3(file: File): Promise<string> {
     const contentType = getMimeType(file)
     const r = await fetch(`${RAILWAY_URL}/get-upload-url`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({filename: file.name, content_type: contentType})
     })
     if (!r.ok) throw new Error('Error obteniendo URL de subida')
@@ -92,11 +83,10 @@ export default function Upload() {
     return public_url
   }
 
-  async function handleAnalizar() {
+  async function handleProcesar() {
     setError('')
     if(tab==='link'){
       if(!url.startsWith('http')){setError('Ingresa un link válido de Drive o Dropbox');return}
-      setVideoUrl(url)
       setStep('uploading')
       await guardarYProcesar(url)
     } else {
@@ -104,11 +94,8 @@ export default function Upload() {
       setStep('uploading')
       try {
         const pubUrl = await subirS3(archivo)
-        setVideoUrl(pubUrl)
         await guardarYProcesar(pubUrl)
-      } catch(e:any){
-        setError(e.message); setStep('error')
-      }
+      } catch(e:any){ setError(e.message); setStep('error') }
     }
   }
 
@@ -121,21 +108,16 @@ export default function Upload() {
 
       let duracionMin = 0
       try {
-        const analisisR = await fetch(`${RAILWAY_URL}/analizar-video`, {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
+        const ar = await fetch(`${RAILWAY_URL}/analizar-video`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({video_url: vUrl})
         })
-        if (analisisR.ok) {
-          const analisis = await analisisR.json()
-          duracionMin = analisis.duracion_minutos || 0
-        }
-      } catch { /* continuar sin validar duración */ }
+        if (ar.ok) { const a = await ar.json(); duracionMin = a.duracion_minutos || 0 }
+      } catch {}
 
       if (duracionMin > 0 && creditos < duracionMin) {
-        setError(`Tu video dura ${Math.round(duracionMin)} min pero solo tienes ${creditos} min de crédito. Adquiere más créditos.`)
-        setStep('error')
-        return
+        setError(`Tu video dura ${Math.round(duracionMin)} min pero solo tienes ${creditos} min de crédito.`)
+        setStep('error'); return
       }
 
       const r = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos`, {
@@ -150,156 +132,77 @@ export default function Upload() {
       })
       if (!r.ok) throw new Error('Error registrando video')
       setStep('queued')
-    } catch(e:any){
-      setError(e.message); setStep('error')
-    }
+    } catch(e:any){ setError(e.message); setStep('error') }
   }
 
-  const C = {
-    wrap:{display:'flex',height:'100vh',overflow:'hidden',position:'relative' as const,zIndex:1},
-    sidebar:{width:'260px',background:'var(--s1)',borderRight:'1px solid var(--b)',padding:'20px 16px',display:'flex',flexDirection:'column' as const,flexShrink:0},
-    main:{flex:1,overflow:'auto',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px'},
-    card:{width:'100%',maxWidth:'560px',background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'20px',overflow:'hidden',boxShadow:'0 24px 48px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)'},
-    topline:{height:'2px',background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)'},
-    inner:{padding:'28px'},
-    label:{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,display:'block',marginBottom:'8px'},
-    input:{width:'100%',background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'10px',padding:'13px 16px',color:'var(--t1)',fontSize:'14px',outline:'none',fontFamily:'inherit'},
-    btn:{width:'100%',padding:'15px',background:'var(--c)',color:'#000',border:'none',borderRadius:'11px',fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'16px',fontWeight:900,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',boxShadow:'0 8px 24px rgba(0,168,232,.3)'},
-    proofRow:{display:'flex',justifyContent:'center',gap:'20px',marginTop:'12px'},
-    proofItem:{fontSize:'11px',color:'var(--t3)',display:'flex',alignItems:'center',gap:'4px'},
-  }
+  const sidebar = (
+    <aside style={{width:'260px',background:'var(--s1)',borderRight:'1px solid var(--b)',padding:'20px 16px',display:'flex',flexDirection:'column' as const,flexShrink:0}}>
+      <Link href="/" style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none',marginBottom:'32px'}}>
+        <img src="/isotipo.png" alt="GISTO" style={{height:'52px',width:'auto',objectFit:'contain'}}/>
+        <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:900,fontSize:'18px',color:'var(--t1)'}}>THE <span style={{color:'var(--c)'}}>GISTO</span></span>
+      </Link>
+      {[
+        {href:'/dashboard',label:'Dashboard',icon:'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',active:false},
+        {href:'/upload',label:'Subir video',icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',active:true},
+        {href:'/perfil',label:'Mi perfil',icon:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',active:false},
+        {href:'/planes',label:'Planes y pagos',icon:'M1 4h22v16H1zM1 10h22',active:false},
+      ].map(item=>(
+        <Link key={item.href} href={item.href} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',color:item.active?'var(--t1)':'var(--t2)',textDecoration:'none',borderRadius:'9px',marginBottom:'2px',fontSize:'14px',fontWeight:500,background:item.active?'rgba(0,168,232,0.08)':'transparent',border:item.active?'1px solid var(--b)':'1px solid transparent'}}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={item.active?'var(--c)':'var(--t3)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={item.icon}/></svg>
+          {item.label}
+        </Link>
+      ))}
+      <div style={{marginTop:'auto'}}>
+        <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase' as const,color:'var(--t3)',marginBottom:'10px',paddingLeft:'2px'}}>Lo que recibirás</div>
+        <div style={{display:'flex',flexDirection:'column' as const,gap:'5px'}}>
+          {ENTREGABLES.map((e,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:'9px',padding:'7px 9px',borderRadius:'8px',background:e.bg,border:`1px solid ${e.border}`}}>
+              <div style={{width:'26px',height:'26px',borderRadius:'6px',background:e.bg,border:`1px solid ${e.border}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={e.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={e.icon}/></svg>
+              </div>
+              <div>
+                <div style={{fontSize:'11px',fontWeight:700,color:'var(--t1)',lineHeight:1.2}}>{e.label}</div>
+                <div style={{fontSize:'10px',color:'var(--t3)',marginTop:'1px'}}>{e.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </aside>
+  )
 
   if(step==='queued') return (
-    <div style={{...C.wrap,alignItems:'center',justifyContent:'center'}}>
+    <div style={{display:'flex',height:'100vh',overflow:'hidden',position:'relative' as const,zIndex:1,alignItems:'center',justifyContent:'center'}}>
       <div style={{textAlign:'center',maxWidth:'480px',padding:'40px'}}>
         <div style={{width:'80px',height:'80px',borderRadius:'50%',background:'rgba(0,229,160,.1)',border:'2px solid rgba(0,229,160,.25)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 24px'}}>
           <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--ok)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
         <h2 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'30px',fontWeight:900,letterSpacing:'-1px',marginBottom:'12px'}}>¡Video en cola!</h2>
-        <p style={{fontSize:'15px',color:'var(--t2)',lineHeight:1.7,marginBottom:'12px'}}>
-          El Motor GISTO está procesando tu video.<br/>
-          En minutos tendrás tus cápsulas listas en el dashboard.
-        </p>
-        <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'12px',padding:'16px',marginBottom:'24px',textAlign:'left'}}>
-          <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'12px'}}>Recibirás</div>
-          {['Cápsulas de video pedagógicas','Documentos Word (transcripción + quiz + glosario)','Interacciones de aula eliminadas automáticamente','Índice completo del curso','Todo en un ZIP descargable'].map((item,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'13px',color:'var(--t2)',marginBottom:i<4?'8px':0}}>
-              <span style={{color:'var(--ok)',fontSize:'11px',fontWeight:700}}>✓</span>{item}
+        <p style={{fontSize:'15px',color:'var(--t2)',lineHeight:1.7,marginBottom:'20px'}}>El Motor GISTO está procesando tu video.<br/>En minutos tendrás tus cápsulas listas.</p>
+        <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'14px',padding:'18px',marginBottom:'24px',textAlign:'left'}}>
+          <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',letterSpacing:'2px',textTransform:'uppercase' as const,marginBottom:'12px'}}>Recibirás</div>
+          {ENTREGABLES.map((e,i)=>(
+            <div key={i} style={{display:'flex',alignItems:'center',gap:'9px',fontSize:'13px',color:'var(--t2)',marginBottom:i<ENTREGABLES.length-1?'9px':0}}>
+              <div style={{width:'22px',height:'22px',borderRadius:'5px',background:e.bg,border:`1px solid ${e.border}`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={e.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={e.icon}/></svg>
+              </div>
+              {e.label}
             </div>
           ))}
         </div>
-        <Link href="/dashboard" style={{display:'inline-flex',alignItems:'center',gap:'7px',background:'var(--c)',color:'#000',padding:'12px 24px',borderRadius:'9px',fontWeight:800,fontSize:'14px',textDecoration:'none'}}>
+        <Link href="/dashboard" style={{display:'inline-flex',alignItems:'center',gap:'7px',background:BTN_GRAD,color:'#000',padding:'13px 28px',borderRadius:'10px',fontWeight:800,fontSize:'14px',textDecoration:'none',boxShadow:BTN_SHADOW}}>
           Ver en dashboard →
         </Link>
       </div>
     </div>
   )
 
-  if(step==='confirm' && analisis) return (
-    <div style={C.wrap}>
-      <aside style={C.sidebar}>
-        <Link href="/" style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none',marginBottom:'36px'}}>
-          <img src="/isotipo.png" alt="GISTO" style={{height:'34px'}}/>
-          <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:900,fontSize:'18px',color:'var(--t1)'}}>THE <span style={{color:'var(--c)'}}>GISTO</span></span>
-        </Link>
-        <div style={{background:'rgba(0,229,160,.06)',border:'1px solid rgba(0,229,160,.15)',borderRadius:'12px',padding:'16px',marginBottom:'16px'}}>
-          <div style={{fontSize:'11px',fontWeight:700,color:'var(--ok)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'8px'}}>✓ Video analizado</div>
-          <div style={{fontSize:'24px',fontWeight:900,fontFamily:"'Cabinet Grotesk',sans-serif",color:'var(--t1)',marginBottom:'2px'}}>{analisis.duracion_texto}</div>
-          <div style={{fontSize:'12px',color:'var(--t2)'}}>duración del video</div>
-        </div>
-        <div style={{background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'12px',padding:'16px'}}>
-          <div style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'12px'}}>Motor GISTO hará</div>
-          {['Transcripción precisa','Análisis pedagógico','Limpieza de aula','Corte anatómico','Documentos + Quizzes'].map((s,i)=>(
-            <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',fontSize:'12px',color:'var(--t2)',marginBottom:i<4?'8px':0}}>
-              <span style={{fontFamily:'monospace',fontSize:'10px',color:'var(--c)',fontWeight:700}}>0{i+1}</span>{s}
-            </div>
-          ))}
-        </div>
-      </aside>
-      <main style={{...C.main,flexDirection:'column' as const}}>
-        <div style={{width:'100%',maxWidth:'520px'}}>
-          <div style={{textAlign:'center',marginBottom:'28px'}}>
-            <div style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'rgba(0,229,160,.08)',border:'1px solid rgba(0,229,160,.2)',padding:'5px 14px',borderRadius:'100px',fontSize:'11px',fontWeight:600,color:'var(--ok)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'16px'}}>
-              <span style={{width:'6px',height:'6px',background:'var(--ok)',borderRadius:'50%'}}/>Análisis completado
-            </div>
-            <h1 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'32px',fontWeight:900,letterSpacing:'-1px',marginBottom:'8px'}}>Listo para procesar</h1>
-            <p style={{fontSize:'15px',color:'var(--t2)',lineHeight:1.6}}>{analisis.mensaje}</p>
-          </div>
-          <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'18px',overflow:'hidden',marginBottom:'16px'}}>
-            <div style={{height:'2px',background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)'}}/>
-            <div style={{padding:'24px'}}>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'24px'}}>
-                <div style={{background:'var(--s2)',borderRadius:'12px',padding:'16px',textAlign:'center'}}>
-                  <div style={{fontSize:'32px',fontWeight:900,fontFamily:"'Cabinet Grotesk',sans-serif",background:'linear-gradient(135deg,var(--c),var(--c2))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',lineHeight:1}}>{analisis.duracion_texto}</div>
-                  <div style={{fontSize:'11px',color:'var(--t3)',marginTop:'4px'}}>Duración del video</div>
-                </div>
-                <div style={{background:'var(--s2)',borderRadius:'12px',padding:'16px',textAlign:'center'}}>
-                  <div style={{fontSize:'32px',fontWeight:900,fontFamily:"'Cabinet Grotesk',sans-serif",background:'linear-gradient(135deg,var(--c),var(--c2))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',lineHeight:1}}>{analisis.minutos_por_modulo} min</div>
-                  <div style={{fontSize:'11px',color:'var(--t3)',marginTop:'4px'}}>Promedio por módulo</div>
-                </div>
-              </div>
-              <div style={{marginBottom:'24px'}}>
-                <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'12px'}}>
-                  <label style={{fontSize:'13px',fontWeight:700,color:'var(--t1)'}}>¿Cuántos módulos deseas?</label>
-                  <div style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'24px',fontWeight:900,color:'var(--c)'}}>{modulosElegidos}</div>
-                </div>
-                <input type="range" min={analisis.modulos_minimo} max={analisis.modulos_maximo} value={modulosElegidos} onChange={e=>setModulosElegidos(parseInt(e.target.value))}
-                  style={{width:'100%',accentColor:'var(--c)',height:'4px',cursor:'pointer'}}/>
-                <div style={{display:'flex',justifyContent:'space-between',fontSize:'11px',color:'var(--t3)',marginTop:'6px'}}>
-                  <span>Mín {analisis.modulos_minimo}</span>
-                  <span style={{color:'var(--c)',fontWeight:600}}>Recomendado: {analisis.modulos_sugeridos}</span>
-                  <span>Máx {analisis.modulos_maximo}</span>
-                </div>
-              </div>
-              <div style={{marginBottom:'20px'}}>
-                <label style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,display:'block',marginBottom:'8px'}}>Nombre del curso</label>
-                <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej: Excel Avanzado 2026" style={{...C.input}}/>
-              </div>
-              <div style={{display:'flex',gap:'10px'}}>
-                <button onClick={()=>setStep('form')} style={{flex:1,padding:'14px',background:'var(--s2)',border:'1px solid var(--b)',color:'var(--t2)',borderRadius:'10px',fontWeight:600,fontSize:'14px',cursor:'pointer'}}>
-                  Cambiar video
-                </button>
-                <button onClick={handleAnalizar} style={{...C.btn,flex:2}}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                  Procesar con Motor GISTO
-                </button>
-              </div>
-            </div>
-          </div>
-          <div style={{background:'rgba(0,168,232,.05)',border:'1px solid var(--b)',borderRadius:'12px',padding:'14px 16px',fontSize:'12px',color:'var(--t2)',display:'flex',alignItems:'flex-start',gap:'10px'}}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--c)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:'1px'}}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            El Motor GISTO eliminará automáticamente interacciones del aula, toma de lista y recesos. Tu video quedará limpio y profesional.
-          </div>
-        </div>
-      </main>
-    </div>
-  )
+  const inputStyle = {width:'100%',background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'10px',padding:'13px 16px',color:'var(--t1)',fontSize:'14px',outline:'none',fontFamily:'inherit'}
 
   return (
-    <div style={C.wrap}>
-      <aside style={C.sidebar}>
-        <Link href="/" style={{display:'flex',alignItems:'center',gap:'10px',textDecoration:'none',marginBottom:'36px'}}>
-          <img src="/isotipo.png" alt="GISTO" style={{height:'34px'}}/>
-          <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:900,fontSize:'18px',color:'var(--t1)'}}>THE <span style={{color:'var(--c)'}}>GISTO</span></span>
-        </Link>
-        {[{href:'/dashboard',label:'Dashboard',icon:'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',active:false},{href:'/upload',label:'Subir video',icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12',active:true}].map(item=>(
-          <Link key={item.href} href={item.href} style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',color:item.active?'var(--t1)':'var(--t2)',textDecoration:'none',borderRadius:'9px',marginBottom:'2px',fontSize:'14px',fontWeight:500,background:item.active?'rgba(0,168,232,0.08)':'transparent',border:item.active?'1px solid var(--b)':'1px solid transparent'}}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={item.active?'var(--c)':'var(--t3)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={item.icon}/></svg>
-            {item.label}
-          </Link>
-        ))}
-        <div style={{marginTop:'auto',background:'var(--s2)',overflow:'hidden',border:'1px solid var(--b)',borderRadius:'12px',padding:'16px'}}>
-          <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase' as const,color:'var(--t3)',marginBottom:'12px'}}>Motor GISTO</div>
-          {[{n:'01',t:'Transcripción',d:'Audio → texto preciso'},{n:'02',t:'Análisis IA',d:'Identifica módulos'},{n:'03',t:'Limpieza de aula',d:'Elimina interacciones'},{n:'04',t:'Corte anatómico',d:'Silencios naturales'},{n:'05',t:'Empaquetado',d:'ZIP profesional'}].map((s,i)=>(
-            <div key={i} style={{display:'flex',gap:'10px',marginBottom:i<4?'10px':0,padding:'8px 10px',borderRadius:'8px',background:'rgba(0,168,232,.03)',border:'1px solid rgba(0,168,232,.07)'}}>
-              <span style={{fontFamily:'monospace',fontSize:'10px',fontWeight:700,color:'var(--c)',flexShrink:0,marginTop:'2px'}}>{s.n}</span>
-              <div><div style={{fontSize:'12px',fontWeight:600,color:'var(--t1)'}}>{s.t}</div><div style={{fontSize:'10px',color:'var(--t3)'}}>{s.d}</div></div>
-            </div>
-          ))}
-        </div>
-      </aside>
-
-      <main style={{...C.main,background:'radial-gradient(ellipse 70% 60% at 65% 40%,rgba(0,168,232,.05) 0%,transparent 60%)'}}>
+    <div style={{display:'flex',height:'100vh',overflow:'hidden',position:'relative' as const,zIndex:1}}>
+      {sidebar}
+      <main style={{flex:1,overflow:'auto',display:'flex',alignItems:'center',justifyContent:'center',padding:'40px',background:'radial-gradient(ellipse 70% 60% at 65% 40%,rgba(0,168,232,.05) 0%,transparent 60%)'}}>
         <div style={{width:'100%',maxWidth:'520px'}}>
           <div style={{textAlign:'center',marginBottom:'28px'}}>
             <div style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'rgba(0,168,232,.08)',border:'1px solid var(--b)',padding:'5px 14px',borderRadius:'100px',fontSize:'11px',fontWeight:600,color:'var(--c)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'16px'}}>
@@ -313,31 +216,32 @@ export default function Upload() {
             <p style={{fontSize:'14px',color:'var(--t2)',lineHeight:1.65}}>Sube tu grabación de Zoom o Meet.<br/>GISTO analiza y elimina lo que no corresponde.</p>
           </div>
 
-          <div style={C.card}>
-            <div style={C.topline}/>
-            <div style={C.inner}>
-              {step==='analyzing'&&(
-                <div style={{textAlign:'center',padding:'32px 0'}}>
-                  <div style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid var(--b)',borderTop:'2px solid var(--c)',margin:'0 auto 20px',animation:'spin 1s linear infinite'}}/>
-                  <h3 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'18px',fontWeight:700,marginBottom:'8px'}}>Analizando tu video...</h3>
-                  <p style={{fontSize:'13px',color:'var(--t2)'}}>Detectando duración y módulos pedagógicos</p>
-                  <p style={{fontSize:'12px',color:'var(--t3)',marginTop:'4px'}}>Máximo 60 segundos</p>
-                </div>
-              )}
+          <div style={{background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'20px',overflow:'hidden',boxShadow:'0 24px 48px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)'}}>
+            <div style={{height:'2px',background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)'}}/>
+            <div style={{padding:'28px'}}>
               {step==='uploading'&&(
                 <div style={{textAlign:'center',padding:'32px 0'}}>
                   <div style={{width:'56px',height:'56px',borderRadius:'50%',border:'2px solid var(--b)',borderTop:'2px solid var(--c)',margin:'0 auto 20px',animation:'spin 1s linear infinite'}}/>
-                  <h3 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'18px',fontWeight:700,marginBottom:'8px'}}>Enviando al Motor GISTO...</h3>
+                  <h3 style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'18px',fontWeight:700,marginBottom:'12px'}}>Enviando al Motor GISTO...</h3>
                   <div style={{height:'5px',background:'rgba(0,168,232,.1)',borderRadius:'3px',overflow:'hidden',margin:'12px 0'}}>
-                    <div style={{height:'100%',width:`${progreso}%`,background:'linear-gradient(90deg,var(--c),var(--c2))',transition:'width .3s',boxShadow:'0 0 8px var(--c)'}}/>
+                    <div style={{height:'100%',width:`${progreso}%`,background:BTN_GRAD,transition:'width .3s',boxShadow:'0 0 8px var(--c)'}}/>
                   </div>
                   <p style={{fontSize:'12px',color:'var(--c)',fontWeight:700,fontFamily:'monospace'}}>{progreso}%</p>
                 </div>
               )}
+
               {(step==='form'||step==='error')&&(<>
+                {/* TABS */}
                 <div style={{display:'flex',gap:'3px',background:'var(--s2)',padding:'3px',borderRadius:'11px',marginBottom:'24px'}}>
-                  {[{id:'link',label:'Link de Drive / Dropbox',icon:'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'},{id:'file',label:'Subir desde tu PC',icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12'}].map(t=>(
-                    <button key={t.id} onClick={()=>setTab(t.id as 'link'|'file')} style={{flex:1,padding:'10px 12px',borderRadius:'9px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:600,transition:'all .2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'7px',background:tab===t.id?'var(--c)':'transparent',color:tab===t.id?'#000':'var(--t2)',boxShadow:tab===t.id?'0 4px 12px rgba(0,168,232,.3)':'none'}}>
+                  {[
+                    {id:'link',label:'Link de Drive / Dropbox',icon:'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'},
+                    {id:'file',label:'Subir desde tu PC',icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12'}
+                  ].map(t=>(
+                    <button key={t.id} onClick={()=>setTab(t.id as any)}
+                      style={{flex:1,padding:'10px 12px',borderRadius:'9px',border:'none',cursor:'pointer',fontSize:'13px',fontWeight:600,transition:'all .2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'7px',
+                        background:tab===t.id?BTN_GRAD:'transparent',
+                        color:tab===t.id?'#000':'var(--t2)',
+                        boxShadow:tab===t.id?BTN_SHADOW:'none'}}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon}/></svg>
                       {t.label}
                     </button>
@@ -346,15 +250,15 @@ export default function Upload() {
 
                 {tab==='link'&&(
                   <div style={{marginBottom:'18px'}}>
-                    <label style={C.label}>URL del video</label>
+                    <label style={{fontSize:'11px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,display:'block',marginBottom:'8px'}}>URL del video</label>
                     <div style={{position:'relative' as const}}>
                       <div style={{position:'absolute' as const,left:'14px',top:'50%',transform:'translateY(-50%)'}}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                       </div>
                       <input type="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://drive.google.com/... o https://dropbox.com/..."
-                        style={{...C.input,paddingLeft:'42px'}}/>
+                        style={{...inputStyle,paddingLeft:'42px'}}/>
                     </div>
-                    <p style={{fontSize:'11px',color:'var(--t3)',marginTop:'6px'}}>⚠️ El link debe estar configurado como público para que GISTO pueda acceder</p>
+                    <p style={{fontSize:'11px',color:'var(--t3)',marginTop:'6px'}}>⚠️ El link debe estar configurado como público</p>
                   </div>
                 )}
 
@@ -392,24 +296,30 @@ export default function Upload() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                     </div>
                     <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej: Excel Avanzado 2026"
-                      style={{width:'100%',background:'var(--s2)',border:'1px solid var(--b)',borderRadius:'10px',padding:'11px 14px 11px 36px',color:'var(--t1)',fontSize:'13px',outline:'none',fontFamily:'inherit'}}/>
+                      style={{...inputStyle,padding:'11px 14px 11px 36px'}}/>
                   </div>
                 </div>
 
                 {error&&(
                   <div style={{padding:'12px 16px',borderRadius:'10px',fontSize:'13px',marginBottom:'16px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)',display:'flex',alignItems:'flex-start',gap:'8px',flexWrap:'wrap' as const}}>
-                    <span>⚠️ {error}</span>
-                    {error.includes('crédito')&&<a href="/planes" style={{color:'var(--c)',textDecoration:'none',fontWeight:700,marginLeft:'4px'}}>Ver planes →</a>}
+                    ⚠️ {error}
+                    {error.includes('crédito')&&<a href="/planes" style={{color:'var(--c)',textDecoration:'none',fontWeight:700}}>Ver planes →</a>}
                   </div>
                 )}
 
-                <button onClick={handleAnalizar} style={C.btn}>
+                <button onClick={handleProcesar}
+                  onMouseEnter={()=>setBtnHover(true)}
+                  onMouseLeave={()=>setBtnHover(false)}
+                  style={{width:'100%',padding:'15px',background:btnHover?BTN_GRAD_H:BTN_GRAD,color:'#000',border:'none',borderRadius:'11px',fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'16px',fontWeight:900,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',boxShadow:btnHover?BTN_SHADOW_H:BTN_SHADOW,transition:'all .25s cubic-bezier(.23,1,.32,1)',transform:btnHover?'translateY(-2px)':'translateY(0)'}}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                   Procesar con Motor GISTO
                 </button>
-                <div style={C.proofRow}>
-                  {['Sin tarjeta','Análisis en ~30 seg','Video limpio profesional'].map(t=>(
-                    <span key={t} style={C.proofItem}><span style={{color:'var(--ok)',fontWeight:700,fontSize:'10px'}}>✓</span>{t}</span>
+
+                <div style={{display:'flex',justifyContent:'center',gap:'20px',marginTop:'12px',flexWrap:'wrap' as const}}>
+                  {['Sin tarjeta','Análisis automático','Video limpio profesional'].map(t=>(
+                    <span key={t} style={{fontSize:'11px',color:'var(--t3)',display:'flex',alignItems:'center',gap:'4px'}}>
+                      <span style={{color:'var(--ok)',fontWeight:700,fontSize:'10px'}}>✓</span>{t}
+                    </span>
                   ))}
                 </div>
               </>)}
