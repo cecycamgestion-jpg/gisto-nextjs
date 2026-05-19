@@ -368,37 +368,132 @@ export default function Dashboard() {
         </div>
 
         <div style={{ padding: isMobile ? '14px' : '24px 28px', flex: 1 }}>
-          {/* Stats grid */}
+          {/* Stats grid — KPI Enterprise */}
           <div ref={statsRef} style={{
             display: 'grid',
             gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)',
             gap: isMobile ? '10px' : '14px', marginBottom: isMobile ? '14px' : '24px'
           }}>
             {[
-              { label: 'Créditos', badge: planActual, bc: PLAN_COLORS[planActual]||'#00A8E8', bbg: PLAN_BG[planActual]||'rgba(0,168,232,.08)', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: statsVisible ? creditos : 0, suffix: ' min' },
-              { label: 'Videos procesados', badge: 'Total', bc: 'var(--ok)', bbg: 'rgba(0,229,160,.08)', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: statsVisible ? videos.length : 0, suffix: '' },
-              { label: 'Módulos generados', badge: 'Total', bc: '#A078FF', bbg: 'rgba(160,120,255,.08)', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: statsVisible ? modulos : 0, suffix: '' },
-              { label: enProceso > 0 ? 'En proceso' : 'Sin cola', badge: enProceso > 0 ? 'Activo' : 'Libre', bc: enProceso > 0 ? 'var(--warn)' : 'var(--ok)', bbg: enProceso > 0 ? 'rgba(255,176,32,.08)' : 'rgba(0,229,160,.08)', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: statsVisible ? enProceso : 0, suffix: '' }
+              {
+                label: 'Créditos disponibles',
+                sublabel: planActual,
+                color: PLAN_COLORS[planActual] || '#00A8E8',
+                icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2',
+                value: loading ? null : creditos,
+                suffix: ' min',
+                extra: (
+                  <div style={{ marginTop: '10px' }}>
+                    <div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%',
+                        width: `${porcentaje}%`,
+                        minWidth: '4px',
+                        background: PLAN_COLORS[planActual] || '#00A8E8',
+                        borderRadius: '2px',
+                        transition: 'width .8s ease',
+                        boxShadow: `0 0 8px ${PLAN_COLORS[planActual] || '#00A8E8'}80`
+                      }}/>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}>
+                      <span style={{ fontWeight: 700, color: PLAN_COLORS[planActual] || '#00A8E8' }}>{creditos} min</span>
+                      <span>{creditosMax} min</span>
+                    </div>
+                  </div>
+                )
+              },
+              {
+                label: 'Videos procesados',
+                sublabel: 'Total acumulado',
+                color: '#00E5A0',
+                icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z',
+                value: loading ? null : videos.length,
+                suffix: '',
+                extra: null
+              },
+              {
+                label: 'Módulos generados',
+                sublabel: 'En todos tus videos',
+                color: '#A078FF',
+                icon: 'M22 12h-4l-3 9L9 3l-3 9H2',
+                value: loading ? null : modulos,
+                suffix: '',
+                extra: null
+              },
+              {
+                label: enProceso > 0 ? 'Videos en proceso' : 'Cola de proceso',
+                sublabel: enProceso > 0 ? 'Motor activo' : 'Motor libre',
+                color: enProceso > 0 ? '#FFB020' : '#00E5A0',
+                icon: enProceso > 0
+                  ? 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2'
+                  : 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3',
+                value: loading ? null : enProceso,
+                suffix: '',
+                extra: null
+              }
             ].map((s, i) => (
               <div key={i} style={{
-                background: `linear-gradient(135deg,${s.bbg},rgba(12,16,24,.8))`,
-                border: `1px solid ${s.bc}22`, borderRadius: '14px',
-                padding: isMobile ? '13px' : '18px',
-                boxShadow: `0 4px 24px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.04)`,
-                backdropFilter: 'blur(8px)'
+                background: 'rgba(10,14,22,0.9)',
+                border: '1px solid rgba(240,246,252,0.06)',
+                borderRadius: '14px',
+                overflow: 'hidden',
+                boxShadow: '0 4px 24px rgba(0,0,0,.25)',
+                position: 'relative' as const,
+                transition: 'border-color .2s',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: isMobile ? '8px' : '12px' }}>
-                  <div style={{ width: isMobile ? '28px' : '34px', height: isMobile ? '28px' : '34px', background: `${s.bc}18`, border: `1px solid ${s.bc}30`, borderRadius: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width={isMobile ? 13 : 16} height={isMobile ? 13 : 16} viewBox="0 0 24 24" fill="none" stroke={s.bc} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d={s.icon}/>
-                    </svg>
+                {/* Barra de acento superior — 3px color sólido del KPI */}
+                <div style={{
+                  height: '3px',
+                  background: s.color,
+                  boxShadow: `0 0 12px ${s.color}60`,
+                }}/>
+                <div style={{ padding: isMobile ? '14px' : '18px 20px' }}>
+                  {/* Header: icono + sublabel */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <div style={{
+                      width: '32px', height: '32px', borderRadius: '8px',
+                      background: `${s.color}14`,
+                      border: `1px solid ${s.color}25`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                        stroke={s.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d={s.icon}/>
+                      </svg>
+                    </div>
+                    <span style={{
+                      fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px',
+                      color: s.color, background: `${s.color}12`,
+                      border: `1px solid ${s.color}25`,
+                      padding: '3px 8px', borderRadius: '100px',
+                      whiteSpace: 'nowrap' as const
+                    }}>{s.sublabel}</span>
                   </div>
-                  <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 7px', borderRadius: '100px', color: s.bc, background: `${s.bc}15`, border: `1px solid ${s.bc}30` }}>{s.badge}</span>
+
+                  {/* Número — color sólido, sin WebkitTextFillColor */}
+                  <div style={{
+                    fontFamily: "'Cabinet Grotesk',sans-serif",
+                    fontSize: isMobile ? '28px' : '36px',
+                    fontWeight: 900,
+                    lineHeight: 1,
+                    marginBottom: '4px',
+                    color: '#f0f6fc',      /* blanco puro — siempre visible */
+                    letterSpacing: '-1px'
+                  }}>
+                    {s.value === null
+                      ? <span style={{ color: '#334455', fontSize: '20px' }}>—</span>
+                      : <AnimatedNumber value={statsVisible ? (s.value as number) : 0} suffix={s.suffix}/>
+                    }
+                  </div>
+
+                  {/* Label del KPI */}
+                  <div style={{ fontSize: '11px', color: '#667788', fontWeight: 500 }}>
+                    {s.label}
+                  </div>
+
+                  {/* Extra (barra de créditos) */}
+                  {s.extra}
                 </div>
-                <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '22px' : '30px', fontWeight: 900, lineHeight: 1, marginBottom: '3px', background: `linear-gradient(135deg,${s.bc},${s.bc}99)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                  {loading ? '—' : <AnimatedNumber value={s.value} suffix={s.suffix}/>}
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{s.label}</div>
               </div>
             ))}
           </div>
