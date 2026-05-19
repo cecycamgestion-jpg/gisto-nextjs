@@ -7,11 +7,11 @@ const MAX_CREDITOS: any = {
   'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200,'academia':1200
 }
 const PLAN_COLORS: any = {
-  'Free':'var(--t2)','Starter':'var(--c)',
-  'Professional':'var(--ok)','Profesional':'var(--ok)','Academia':'#FFB020'
+  'Free':'#8899aa','Starter':'#00A8E8',
+  'Professional':'#00E5A0','Profesional':'#00E5A0','Academia':'#FFB020'
 }
 const PLAN_BG: any = {
-  'Free':'rgba(240,246,252,.05)','Starter':'rgba(0,168,232,.08)',
+  'Free':'rgba(136,153,170,.06)','Starter':'rgba(0,168,232,.08)',
   'Professional':'rgba(0,229,160,.08)','Profesional':'rgba(0,229,160,.08)','Academia':'rgba(255,176,32,.08)'
 }
 const PROGRESS_MSGS = [
@@ -208,7 +208,7 @@ export default function Dashboard() {
       border: active ? '1px solid var(--b)' : '1px solid transparent', transition: 'all .2s'
     }}>
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-        stroke={active ? 'var(--c)' : 'var(--t3)'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        stroke={active ? '#00A8E8' : '#667788'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d={icon}/>
       </svg>
       {label}
@@ -237,7 +237,7 @@ export default function Dashboard() {
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none', marginBottom: '36px' }}>
           <img src="/isotipo.png" alt="GISTO" style={{ height: '52px', width: 'auto', objectFit: 'contain' }}/>
           <span style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontWeight: 900, fontSize: '18px', color: 'var(--t1)' }}>
-            THE <span style={{ color: 'var(--c)' }}>GISTO</span>
+            THE <span style={{ color: '#00A8E8' }}>GISTO</span>
           </span>
         </Link>
 
@@ -261,14 +261,14 @@ export default function Dashboard() {
               height: '100%',
               width: `${porcentaje}%`,
               minWidth: '4px',             /* siempre visible aunque sea 0 min */
-              background: 'linear-gradient(90deg,var(--c),var(--c2))',
+              background: 'linear-gradient(90deg,#00A8E8,#00D4FF)',
               borderRadius: '3px', transition: 'width .5s ease',
               boxShadow: '0 0 6px rgba(0,168,232,.4)'
             }}/>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' }}>
-            <strong style={{ color: 'var(--c)', fontSize: '15px' }}>{creditos} min</strong>
-            <span style={{ color: 'var(--t3)' }}>/ {creditosMax} min</span>
+            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{creditos} min</strong>
+            <span style={{ color: '#667788' }}>/ {creditosMax} min</span>
           </div>
           {/* FIX: label del plan debajo de la barra */}
           <div style={{ marginTop: '6px' }}>
@@ -276,9 +276,9 @@ export default function Dashboard() {
               <span style={{
                 display: 'inline-block', fontSize: '10px', fontWeight: 700,
                 padding: '2px 8px', borderRadius: '100px',
-                color: PLAN_COLORS[planActual] || 'var(--c)',
+                color: PLAN_COLORS[planActual] || '#00A8E8',
                 background: PLAN_BG[planActual] || 'rgba(0,168,232,.08)',
-                border: `1px solid ${PLAN_COLORS[planActual] || 'var(--c)'}30`
+                border: `1px solid ${PLAN_COLORS[planActual] || '#00A8E8'}30`
               }}>{planActual}</span>
             </Link>
           </div>
@@ -293,7 +293,7 @@ export default function Dashboard() {
           <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '2px solid var(--b)' }}>
             {avatarUrl
               ? <img src={avatarUrl} alt={user?.nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
-              : <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,var(--c),var(--c2))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Cabinet Grotesk',sans-serif", fontWeight: 800, fontSize: '13px', color: '#000' }}>{inicial}</div>
+              : <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Cabinet Grotesk',sans-serif", fontWeight: 800, fontSize: '13px', color: '#000' }}>{inicial}</div>
             }
           </div>
           <div style={{ minWidth: 0 }}>
@@ -346,9 +346,9 @@ export default function Dashboard() {
           {/* FIX: créditos visibles en topbar móvil */}
           {isMobile && (
             <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}>
-              <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--c)' }}>{creditos} min</span>
+              <span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{creditos} min</span>
               <div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '3px', background: 'linear-gradient(90deg,var(--c),var(--c2))', borderRadius: '2px' }}/>
+                <div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '3px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/>
               </div>
             </Link>
           )}
@@ -375,7 +375,7 @@ export default function Dashboard() {
             gap: isMobile ? '10px' : '14px', marginBottom: isMobile ? '14px' : '24px'
           }}>
             {[
-              { label: 'Créditos', badge: planActual, bc: PLAN_COLORS[planActual]||'var(--c)', bbg: PLAN_BG[planActual]||'rgba(0,168,232,.08)', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: statsVisible ? creditos : 0, suffix: ' min' },
+              { label: 'Créditos', badge: planActual, bc: PLAN_COLORS[planActual]||'#00A8E8', bbg: PLAN_BG[planActual]||'rgba(0,168,232,.08)', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: statsVisible ? creditos : 0, suffix: ' min' },
               { label: 'Videos procesados', badge: 'Total', bc: 'var(--ok)', bbg: 'rgba(0,229,160,.08)', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: statsVisible ? videos.length : 0, suffix: '' },
               { label: 'Módulos generados', badge: 'Total', bc: '#A078FF', bbg: 'rgba(160,120,255,.08)', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: statsVisible ? modulos : 0, suffix: '' },
               { label: enProceso > 0 ? 'En proceso' : 'Sin cola', badge: enProceso > 0 ? 'Activo' : 'Libre', bc: enProceso > 0 ? 'var(--warn)' : 'var(--ok)', bbg: enProceso > 0 ? 'rgba(255,176,32,.08)' : 'rgba(0,229,160,.08)', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: statsVisible ? enProceso : 0, suffix: '' }
@@ -411,7 +411,7 @@ export default function Dashboard() {
             marginBottom: isMobile ? '16px' : '24px', textDecoration: 'none', flexWrap: 'wrap' as const, transition: 'all .3s'
           }}>
             <div style={{ width: isMobile ? '38px' : '46px', height: isMobile ? '38px' : '46px', background: 'linear-gradient(135deg,rgba(0,168,232,.15),rgba(0,168,232,.05))', border: '1px solid rgba(0,168,232,.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width={isMobile ? 17 : 20} height={isMobile ? 17 : 20} viewBox="0 0 24 24" fill="none" stroke="var(--c)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <svg width={isMobile ? 17 : 20} height={isMobile ? 17 : 20} viewBox="0 0 24 24" fill="none" stroke="#00A8E8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
               </svg>
             </div>
@@ -446,7 +446,7 @@ export default function Dashboard() {
 
           {loading && (
             <div style={{ textAlign: 'center', padding: '48px', color: 'var(--t3)' }}>
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--b)', borderTop: '2px solid var(--c)', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}/>
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--b)', borderTop: '2px solid #00A8E8', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}/>
               Cargando tus videos...
             </div>
           )}
@@ -454,7 +454,7 @@ export default function Dashboard() {
           {!loading && filtrados.length === 0 && (
             <div style={{ textAlign: 'center', padding: isMobile ? '36px 20px' : '56px 24px', background: 'var(--s1)', borderRadius: '16px', border: '1px solid var(--b)' }}>
               <div style={{ width: '56px', height: '56px', borderRadius: '14px', background: 'rgba(0,168,232,.08)', border: '1px solid rgba(0,168,232,.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--c)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#00A8E8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>
                 </svg>
               </div>
