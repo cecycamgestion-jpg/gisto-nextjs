@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 const PAISES = [
@@ -18,6 +18,124 @@ const ENTREGABLES = [
   { icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z', label: 'Bibliografía APA con links', color: '#FFB020' },
   { icon: 'M21 8l-8-5-8 5v10l8 5 8-5V8z', label: 'ZIP listo para Moodle y Canvas', color: '#A078FF' },
 ]
+
+// ── CustomSelect — reemplaza <select> nativo completamente ───────────────────
+function CustomSelect({
+  value, onChange, options, placeholder, style = {}
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder: string
+  style?: React.CSSProperties
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Cerrar al hacer click fuera
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  return (
+    <div ref={ref} style={{ position: 'relative', ...style }}>
+      {/* Trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%',
+          background: 'rgba(12,16,24,0.85)',
+          border: open ? '1px solid rgba(0,168,232,0.5)' : '1px solid rgba(240,246,252,0.1)',
+          borderRadius: '10px',
+          padding: '13px 40px 13px 16px',
+          color: value ? '#f0f6fc' : '#667788',
+          fontSize: '14px',
+          fontFamily: 'inherit',
+          textAlign: 'left',
+          cursor: 'pointer',
+          outline: 'none',
+          transition: 'all .2s',
+          boxShadow: open ? '0 0 0 3px rgba(0,168,232,.12)' : 'none',
+          display: 'flex', alignItems: 'center',
+          WebkitAppearance: 'none',
+        }}
+      >
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {value || placeholder}
+        </span>
+        {/* Chevron */}
+        <svg
+          width="14" height="14" viewBox="0 0 24 24" fill="none"
+          stroke="#667788" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+          style={{
+            position: 'absolute', right: '14px', top: '50%',
+            transform: `translateY(-50%) rotate(${open ? '180deg' : '0deg'})`,
+            transition: 'transform .2s', flexShrink: 0
+          }}
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {/* Dropdown list — 100% custom, sin OS */}
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0, right: 0,
+          background: '#0e1420',
+          border: '1px solid rgba(0,168,232,0.2)',
+          borderRadius: '10px',
+          overflow: 'hidden',
+          zIndex: 9999,
+          boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
+          maxHeight: '220px',
+          overflowY: 'auto',
+        }}>
+          {options.map(opt => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => { onChange(opt); setOpen(false) }}
+              style={{
+                width: '100%',
+                padding: '11px 16px',
+                background: value === opt ? 'rgba(0,168,232,0.12)' : 'transparent',
+                border: 'none',
+                borderBottom: '1px solid rgba(240,246,252,0.04)',
+                color: value === opt ? '#00A8E8' : '#c0ccd8',
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                textAlign: 'left',
+                cursor: 'pointer',
+                transition: 'background .15s',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}
+              onMouseEnter={e => { if (value !== opt) (e.target as HTMLElement).style.background = 'rgba(255,255,255,0.04)' }}
+              onMouseLeave={e => { if (value !== opt) (e.target as HTMLElement).style.background = 'transparent' }}
+            >
+              {opt}
+              {value === opt && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                  stroke="#00A8E8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function Login() {
   const [mode, setMode] = useState<'login'|'register'>('login')
@@ -59,8 +177,7 @@ export default function Login() {
         ? { email, password }
         : { email, password, nombre, pais, tipo_documento: tipoDocumento, numero_documento: numeroDocumento, razon_social: razonSocial || nombre }
       const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
       const data = await res.json()
@@ -76,13 +193,21 @@ export default function Login() {
   const botonDeshabilitado = loading || (mode === 'register' && !aceptaTerminos)
 
   const inputStyle: React.CSSProperties = {
-    width: '100%', background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(240,246,252,0.1)', borderRadius: '10px',
-    padding: '13px 16px', color: 'var(--t1)', fontSize: '14px',
-    outline: 'none', fontFamily: 'inherit', transition: 'all .2s'
+    width: '100%',
+    background: 'rgba(12,16,24,0.85)',
+    border: '1px solid rgba(240,246,252,0.1)',
+    borderRadius: '10px',
+    padding: '13px 16px',
+    color: '#f0f6fc',
+    fontSize: '14px',
+    outline: 'none',
+    fontFamily: 'inherit',
+    transition: 'all .2s',
+    WebkitAppearance: 'none',
   }
+
   const labelStyle: React.CSSProperties = {
-    fontSize: '11px', fontWeight: 700, color: 'var(--t3)',
+    fontSize: '11px', fontWeight: 700, color: '#667788',
     letterSpacing: '1.5px', textTransform: 'uppercase',
     display: 'block', marginBottom: '8px'
   }
@@ -92,7 +217,7 @@ export default function Login() {
       minHeight: '100vh', display: 'flex',
       background: 'var(--bg)', position: 'relative' as const, overflow: 'hidden'
     }}>
-      {/* ── Panel izquierdo — Value proposition ─────────────────────────── */}
+      {/* ── Panel izquierdo ─────────────────────────────────────────────── */}
       <div style={{
         flex: '0 0 48%', display: 'flex', flexDirection: 'column' as const,
         justifyContent: 'center', padding: '60px 56px',
@@ -100,8 +225,6 @@ export default function Login() {
         borderRight: '1px solid rgba(0,168,232,0.1)',
         position: 'relative' as const,
       }} className="login-left">
-
-        {/* Orb de fondo */}
         <div style={{
           position: 'absolute' as const, top: '-10%', left: '-20%',
           width: '500px', height: '500px',
@@ -109,7 +232,6 @@ export default function Login() {
           borderRadius: '50%', pointerEvents: 'none'
         }}/>
 
-        {/* Logo */}
         <a href="https://thegisto.com" style={{
           display: 'inline-flex', alignItems: 'center', gap: '12px',
           textDecoration: 'none', marginBottom: '56px'
@@ -118,27 +240,21 @@ export default function Login() {
             height: '52px', width: 'auto', objectFit: 'contain',
             filter: 'drop-shadow(0 0 12px rgba(0,168,232,0.4))'
           }}/>
-          <span style={{
-            fontFamily: "'Cabinet Grotesk', sans-serif",
-            fontWeight: 900, fontSize: '22px', color: 'var(--t1)'
-          }}>
-            THE <span style={{ color: 'var(--c)' }}>GISTO</span>
+          <span style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: '22px', color: 'var(--t1)' }}>
+            THE <span style={{ color: '#00A8E8' }}>GISTO</span>
           </span>
         </a>
 
-        {/* Headline */}
         <div style={{ marginBottom: '48px' }}>
           <h1 style={{
             fontFamily: "'Cabinet Grotesk', sans-serif",
             fontSize: 'clamp(28px,3vw,40px)', fontWeight: 900,
-            letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: '14px',
-            color: 'var(--t1)'
+            letterSpacing: '-1.5px', lineHeight: 1.1, marginBottom: '14px', color: 'var(--t1)'
           }}>
             Una clase grabada.<br/>
             <span style={{
-              background: 'linear-gradient(90deg, var(--c), var(--c2))',
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text'
+              background: 'linear-gradient(90deg, #00A8E8, #00D4FF)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text'
             }}>Un curso completo.</span>
           </h1>
           <p style={{ fontSize: '15px', color: 'var(--t2)', lineHeight: 1.7, maxWidth: '380px' }}>
@@ -146,7 +262,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* Entregables animados */}
         <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '8px', marginBottom: '48px' }}>
           {ENTREGABLES.map((e, i) => (
             <div key={i} style={{
@@ -170,8 +285,7 @@ export default function Login() {
               </div>
               <span style={{
                 fontSize: '13px', fontWeight: activeItem === i ? 600 : 400,
-                color: activeItem === i ? 'var(--t1)' : 'var(--t2)',
-                transition: 'all .4s'
+                color: activeItem === i ? 'var(--t1)' : 'var(--t2)', transition: 'all .4s'
               }}>{e.label}</span>
               {activeItem === i && (
                 <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
@@ -185,7 +299,6 @@ export default function Login() {
           ))}
         </div>
 
-        {/* Stats */}
         <div style={{ display: 'flex', gap: '32px' }}>
           {[
             { num: '40 min', label: 'Gratis al registrarte' },
@@ -194,9 +307,8 @@ export default function Login() {
           ].map((s, i) => (
             <div key={i}>
               <div style={{
-                fontFamily: "'Cabinet Grotesk', sans-serif",
-                fontSize: '22px', fontWeight: 900,
-                background: 'linear-gradient(135deg, var(--c), var(--c2))',
+                fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: '22px', fontWeight: 900,
+                background: 'linear-gradient(135deg, #00A8E8, #00D4FF)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text', lineHeight: 1, marginBottom: '3px'
               }}>{s.num}</div>
@@ -213,7 +325,6 @@ export default function Login() {
       }} className="login-right">
         <div style={{ width: '100%', maxWidth: '420px' }}>
 
-          {/* Título del formulario */}
           <div style={{ marginBottom: '28px' }}>
             <h2 style={{
               fontFamily: "'Cabinet Grotesk', sans-serif",
@@ -223,17 +334,14 @@ export default function Login() {
               {mode === 'login' ? 'Bienvenido de vuelta' : 'Crea tu cuenta gratis'}
             </h2>
             <p style={{ fontSize: '14px', color: 'var(--t2)' }}>
-              {mode === 'login'
-                ? 'Ingresa a tu cuenta para continuar.'
-                : '40 minutos de crédito gratuito. Sin tarjeta.'}
+              {mode === 'login' ? 'Ingresa a tu cuenta para continuar.' : '40 minutos de crédito gratuito. Sin tarjeta.'}
             </p>
           </div>
 
           {/* Tabs */}
           <div style={{
-            display: 'flex', gap: '3px',
-            background: 'rgba(255,255,255,0.04)', padding: '3px',
-            borderRadius: '11px', marginBottom: '24px',
+            display: 'flex', gap: '3px', background: 'rgba(255,255,255,0.04)',
+            padding: '3px', borderRadius: '11px', marginBottom: '24px',
             border: '1px solid rgba(240,246,252,0.08)'
           }}>
             {(['login', 'register'] as const).map(m => (
@@ -241,8 +349,7 @@ export default function Login() {
                 onClick={() => { setMode(m); setError(''); setAceptaTerminos(false) }}
                 style={{
                   flex: 1, padding: '10px', borderRadius: '9px', border: 'none',
-                  cursor: 'pointer', fontSize: '14px', fontWeight: 600,
-                  transition: 'all .2s',
+                  cursor: 'pointer', fontSize: '14px', fontWeight: 600, transition: 'all .2s',
                   background: mode === m ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'transparent',
                   color: mode === m ? '#000' : 'var(--t2)',
                   boxShadow: mode === m ? '0 4px 12px rgba(0,168,232,0.3)' : 'none'
@@ -281,51 +388,51 @@ export default function Login() {
                   background: 'linear-gradient(90deg,transparent,rgba(0,168,232,0.2),transparent)',
                   margin: '4px 0'
                 }}/>
-                <div style={{
-                  fontSize: '11px', fontWeight: 700, color: 'var(--c)',
-                  letterSpacing: '2px', textTransform: 'uppercase' as const
-                }}>
+                <div style={{ fontSize: '11px', fontWeight: 700, color: '#00A8E8', letterSpacing: '2px', textTransform: 'uppercase' as const }}>
                   Datos de facturación
                 </div>
+
+                {/* País — CustomSelect, sin select nativo */}
                 <div>
                   <label style={labelStyle}>País *</label>
-                  <select value={pais} onChange={e => setPais(e.target.value)} style={{
-                    ...inputStyle,
-                    color: pais ? 'var(--t1)' : 'var(--t3)', cursor: 'pointer'
-                  }}>
-                    <option value="">Selecciona tu país</option>
-                    {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
-                  </select>
+                  <CustomSelect
+                    value={pais}
+                    onChange={setPais}
+                    options={PAISES}
+                    placeholder="Selecciona tu país"
+                  />
                 </div>
+
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '10px' }}>
+                  {/* Tipo documento — CustomSelect */}
                   <div>
                     <label style={labelStyle}>Tipo doc. *</label>
-                    <select value={tipoDocumento} onChange={e => setTipoDocumento(e.target.value)} style={{
-                      ...inputStyle,
-                      color: tipoDocumento ? 'var(--t1)' : 'var(--t3)',
-                      fontSize: '13px', padding: '13px 12px', cursor: 'pointer'
-                    }}>
-                      <option value="">Tipo</option>
-                      {TIPOS_DOCUMENTO.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <CustomSelect
+                      value={tipoDocumento}
+                      onChange={setTipoDocumento}
+                      options={TIPOS_DOCUMENTO}
+                      placeholder="Tipo"
+                      style={{ fontSize: '13px' }}
+                    />
                   </div>
                   <div>
                     <label style={labelStyle}>N° documento *</label>
                     <input type="text" value={numeroDocumento}
                       onChange={e => setNumeroDocumento(e.target.value)}
-                      placeholder="Número" style={{ ...inputStyle, fontSize: '13px', padding: '13px 12px' }}/>
+                      placeholder="Número"
+                      style={{ ...inputStyle, fontSize: '13px', padding: '13px 12px' }}/>
                   </div>
                 </div>
+
                 <div>
                   <label style={labelStyle}>
                     Empresa / Nombre factura{' '}
-                    <span style={{ color: 'var(--t3)', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }}>
+                    <span style={{ color: '#667788', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }}>
                       (opcional)
                     </span>
                   </label>
                   <input type="text" value={razonSocial} onChange={e => setRazonSocial(e.target.value)}
-                    placeholder="Dejar vacío para usar tu nombre"
-                    style={inputStyle}/>
+                    placeholder="Dejar vacío para usar tu nombre" style={inputStyle}/>
                 </div>
               </>
             )}
@@ -345,19 +452,18 @@ export default function Login() {
                 }}>
                   {aceptaTerminos && (
                     <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
-                      <polyline points="2,6 5,9 10,3" stroke="#000" strokeWidth="2"
-                        strokeLinecap="round" strokeLinejoin="round"/>
+                      <polyline points="2,6 5,9 10,3" stroke="#000" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   )}
                 </div>
                 <span style={{ fontSize: '13px', color: 'var(--t2)', lineHeight: 1.5 }}>
                   Acepto los{' '}
                   <a href="https://thegisto.com/legal/terminos/" target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--c)', textDecoration: 'none', fontWeight: 600 }}>
+                    style={{ color: '#00A8E8', textDecoration: 'none', fontWeight: 600 }}>
                     Términos de servicio
                   </a>{' '}y la{' '}
                   <a href="https://thegisto.com/legal/privacidad/" target="_blank" rel="noopener noreferrer"
-                    style={{ color: 'var(--c)', textDecoration: 'none', fontWeight: 600 }}>
+                    style={{ color: '#00A8E8', textDecoration: 'none', fontWeight: 600 }}>
                     Política de privacidad
                   </a>
                 </span>
@@ -386,9 +492,7 @@ export default function Login() {
           {/* Botón principal */}
           <button onClick={handleSubmit} disabled={botonDeshabilitado} style={{
             width: '100%', padding: '15px',
-            background: botonDeshabilitado
-              ? 'rgba(0,168,232,.25)'
-              : 'linear-gradient(135deg,#00A8E8,#00D4FF)',
+            background: botonDeshabilitado ? 'rgba(0,168,232,.25)' : 'linear-gradient(135deg,#00A8E8,#00D4FF)',
             color: botonDeshabilitado ? 'rgba(0,0,0,.4)' : '#000',
             border: 'none', borderRadius: '11px',
             fontFamily: "'Cabinet Grotesk', sans-serif",
@@ -410,8 +514,7 @@ export default function Login() {
               <>
                 <div style={{
                   width: '18px', height: '18px',
-                  border: '2px solid rgba(0,0,0,.2)',
-                  borderTop: '2px solid #000',
+                  border: '2px solid rgba(0,0,0,.2)', borderTop: '2px solid #000',
                   borderRadius: '50%', animation: 'spin 1s linear infinite'
                 }}/>
                 {mode === 'login' ? 'Ingresando...' : 'Creando cuenta...'}
@@ -421,26 +524,17 @@ export default function Login() {
             )}
           </button>
 
-          {/* Proof line */}
-          <div style={{
-            display: 'flex', justifyContent: 'center', gap: '20px',
-            marginTop: '14px', flexWrap: 'wrap' as const
-          }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '14px', flexWrap: 'wrap' as const }}>
             {(mode === 'register'
               ? ['40 min gratis', 'Sin tarjeta', 'Créditos sin vencimiento']
               : ['Acceso inmediato', 'Tus créditos te esperan', 'Soporte incluido']
             ).map(t => (
-              <span key={t} style={{
-                fontSize: '11px', color: 'var(--t3)',
-                display: 'flex', alignItems: 'center', gap: '4px'
-              }}>
-                <span style={{ color: 'var(--ok)', fontWeight: 700, fontSize: '10px' }}>✓</span>
-                {t}
+              <span key={t} style={{ fontSize: '11px', color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ color: '#00E5A0', fontWeight: 700, fontSize: '10px' }}>✓</span>{t}
               </span>
             ))}
           </div>
 
-          {/* Volver */}
           <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--t3)', marginTop: '28px' }}>
             <a href="https://thegisto.com" style={{ color: 'var(--t2)', textDecoration: 'none' }}>
               ← Volver a thegisto.com
@@ -451,15 +545,25 @@ export default function Login() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
-        input:focus, select:focus {
+        /* FIX definitivo: inputs con fondo oscuro hardcodeado, sin depender de vars CSS */
+        input {
+          background-color: rgba(12,16,24,0.85) !important;
+          color: #f0f6fc !important;
+        }
+        input::placeholder { color: #667788 !important; }
+        input:focus {
           border-color: rgba(0,168,232,0.5) !important;
           box-shadow: 0 0 0 3px rgba(0,168,232,.12) !important;
-          background: rgba(0,168,232,0.04) !important;
+          background-color: rgba(0,168,232,0.06) !important;
         }
         button:not(:disabled):hover {
           transform: translateY(-2px);
           box-shadow: 0 12px 32px rgba(0,168,232,.5) !important;
         }
+        /* Scrollbar del dropdown */
+        .custom-select-list::-webkit-scrollbar { width: 4px; }
+        .custom-select-list::-webkit-scrollbar-track { background: transparent; }
+        .custom-select-list::-webkit-scrollbar-thumb { background: rgba(0,168,232,.3); border-radius: 2px; }
         @media (max-width: 768px) {
           .login-left { display: none !important; }
           .login-right { padding: 32px 24px !important; }
