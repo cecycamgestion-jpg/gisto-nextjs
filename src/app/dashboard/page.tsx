@@ -230,7 +230,10 @@ export default function Dashboard() {
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
     fetch('/api/airtable/usuario').then(r => r.json()).then(data => {
       if (data.error) return
-      const cred = data.creditos || 0; const plan = data.plan || 'Free'
+      const credAirtable = data.creditos || 0; const plan = data.plan || 'Free'
+      // FIX: respetar deducciones pendientes — usar el menor valor entre localStorage y Airtable
+      const credLocal = parsed.creditos || 0
+      const cred = Math.min(credLocal, credAirtable)
       setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan] || 40)
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
       const updated = { ...parsed, creditos: cred, plan, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
