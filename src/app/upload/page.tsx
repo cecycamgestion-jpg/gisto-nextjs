@@ -44,6 +44,9 @@ export default function Upload() {
   const [progreso, setProgreso] = useState(0)
   const [error, setError] = useState('')
   const [drag, setDrag] = useState(false)
+  const [tipoContenido, setTipoContenido] = useState<string>('')  // OBLIGATORIO
+  const [mantenerInteracciones, setMantenerInteracciones] = useState(false)
+  const [permitirCapsulasLargas, setPermitirCapsulasLargas] = useState(false)
   const [btnHover, setBtnHover] = useState(false)
   const [user, setUser] = useState<any>(null)
   const [creditos, setCreditos] = useState(0)
@@ -105,6 +108,10 @@ export default function Upload() {
 
   async function handleProcesar() {
     setError('')
+    if (!tipoContenido) {
+  setError('Selecciona el tipo de contenido del video (obligatorio)')
+  return
+}
     if (tab === 'link') {
       if (!url.startsWith('http')) { setError('Ingresa un link válido de Drive o Dropbox'); return }
       setStep('uploading'); await guardarYProcesar(url)
@@ -141,10 +148,13 @@ export default function Upload() {
         method:'POST',
         headers:{'Authorization':`Bearer ${AIRTABLE_KEY}`,'Content-Type':'application/json'},
         body: JSON.stringify({fields:{
-          URL: vUrl, VideoID: nombre||`Video-${Date.now()}`,
-          Estado: 'Pendiente',
-          Usuario_Email: userData.email||''
-        }})
+  URL: vUrl, VideoID: nombre||`Video-${Date.now()}`,
+  Estado: 'Pendiente',
+  Usuario_Email: userData.email||'',
+  Tipo_Contenido: tipoContenido,
+  Mantener_Interacciones: mantenerInteracciones,
+  Permitir_Capsulas_Largas: permitirCapsulasLargas
+}})
       })
       if (!r.ok) throw new Error('Error registrando video')
 
@@ -452,7 +462,74 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                       style={{...inputStyle,padding:'10px 12px 10px 32px'}}/>
                   </div>
                 </div>
+{/* ⚙️ Configuración del procesamiento (v13 filtros) */}
+<div style={{
+  marginBottom: isMobile ? '10px' : '14px',
+  padding: isMobile ? '10px' : '12px',
+  background: 'rgba(0,168,232,.04)',
+  border: `1px solid ${tipoContenido ? 'rgba(0,168,232,.18)' : 'rgba(255,70,100,.3)'}`,
+  borderRadius: '10px',
+  transition: 'border-color .2s'
+}}>
+  {/* Tipo de contenido — DROPDOWN OBLIGATORIO */}
+  <div style={{marginBottom: '8px'}}>
+    <label style={{
+      fontSize:'10px',fontWeight:700,
+      color: tipoContenido ? 'var(--t3)' : 'var(--err)',
+      letterSpacing:'1.5px',textTransform:'uppercase' as const,
+      display:'block',marginBottom:'5px'
+    }}>
+      Tipo de contenido <span style={{color:'var(--err)'}}>*</span>
+    </label>
+    <select
+      value={tipoContenido}
+      onChange={e=>setTipoContenido(e.target.value)}
+      style={{...inputStyle, padding:'9px 12px', fontSize:'13px', cursor:'pointer'}}
+    >
+      <option value="" disabled>— Selecciona qué muestra tu video —</option>
+      <option value="Diapositivas">Diapositivas (PPT, slides)</option>
+      <option value="Software">Software o pantalla compartida (Excel, sistemas)</option>
+      <option value="Pizarra">Pizarra digital o anotaciones en vivo</option>
+      <option value="Sin pantalla">Sin pantalla (solo cámara al docente)</option>
+    </select>
+  </div>
 
+  {/* 2 checkboxes en FILA HORIZONTAL — wrap en mobile si no caben */}
+  <div style={{
+    display:'flex',
+    gap: isMobile ? '8px' : '12px',
+    flexWrap:'wrap' as const,
+    fontSize:'12px',
+    color:'var(--t2)'
+  }}>
+    <label style={{
+      display:'flex',alignItems:'center',gap:'6px',
+      cursor:'pointer',userSelect:'none' as const,
+      padding:'4px 0'
+    }}>
+      <input
+        type="checkbox"
+        checked={mantenerInteracciones}
+        onChange={e=>setMantenerInteracciones(e.target.checked)}
+        style={{cursor:'pointer', accentColor:'var(--c)'}}
+      />
+      <span>Mantener interacciones con alumnos</span>
+    </label>
+    <label style={{
+      display:'flex',alignItems:'center',gap:'6px',
+      cursor:'pointer',userSelect:'none' as const,
+      padding:'4px 0'
+    }}>
+      <input
+        type="checkbox"
+        checked={permitirCapsulasLargas}
+        onChange={e=>setPermitirCapsulasLargas(e.target.checked)}
+        style={{cursor:'pointer', accentColor:'var(--c)'}}
+      />
+      <span>Permitir cápsulas largas si el tema lo exige</span>
+    </label>
+  </div>
+</div>
                 {/* Error */}
                 {error && (
                   <div style={{padding:'10px 12px',borderRadius:'9px',fontSize:'12px',marginBottom:'10px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)',display:'flex',alignItems:'flex-start',gap:'7px'}}>
