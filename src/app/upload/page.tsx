@@ -44,7 +44,16 @@ export default function Upload() {
   const [progreso, setProgreso] = useState(0)
   const [error, setError] = useState('')
   const [drag, setDrag] = useState(false)
-  const [tipoContenido, setTipoContenido] = useState<string>('')  // OBLIGATORIO
+  const [tipoContenido, setTipoContenido] = useState<string[]>([])
+
+// Helper para toggle de cada opción
+const toggleTipo = (valor: string) => {
+  setTipoContenido(prev =>
+    prev.includes(valor)
+      ? prev.filter(t => t !== valor)
+      : [...prev, valor]
+  )
+}
   const [mantenerInteracciones, setMantenerInteracciones] = useState(false)
   const [permitirCapsulasLargas, setPermitirCapsulasLargas] = useState(false)
   const [btnHover, setBtnHover] = useState(false)
@@ -108,8 +117,8 @@ export default function Upload() {
 
   async function handleProcesar() {
     setError('')
-    if (!tipoContenido) {
-  setError('Selecciona el tipo de contenido del video (obligatorio)')
+    if (tipoContenido.length === 0) {
+  setError('Selecciona al menos un tipo de contenido del video')
   return
 }
     if (tab === 'link') {
@@ -462,71 +471,100 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                       style={{...inputStyle,padding:'10px 12px 10px 32px'}}/>
                   </div>
                 </div>
-{/* ⚙️ Configuración del procesamiento (v13 filtros) — COMPACTO */}
+{/* ⚙️ Configuración del procesamiento (v13.1 multi-select) */}
 <div style={{
   marginBottom: isMobile ? '8px' : '12px',
   padding: '8px 10px',
   background: 'rgba(0,168,232,.04)',
-  border: `1px solid ${tipoContenido ? 'rgba(0,168,232,.18)' : 'rgba(255,70,100,.3)'}`,
+  border: `1px solid ${tipoContenido.length > 0 ? 'rgba(0,168,232,.18)' : 'rgba(255,70,100,.3)'}`,
   borderRadius: '10px',
   transition: 'border-color .2s'
 }}>
-  {/* Dropdown tipo contenido — inline label + select, 1 sola línea */}
+  {/* Label del grupo */}
   <div style={{
-    display:'flex',
-    alignItems:'center',
-    gap:'8px',
-    marginBottom:'6px',
-    flexWrap: isMobile ? 'wrap' as const : 'nowrap' as const
+    fontSize:'10px',fontWeight:700,
+    color: tipoContenido.length > 0 ? 'var(--t3)' : 'var(--err)',
+    letterSpacing:'1px',textTransform:'uppercase' as const,
+    marginBottom:'6px'
   }}>
-    <label style={{
-      fontSize:'10px',fontWeight:700,
-      color: tipoContenido ? 'var(--t3)' : 'var(--err)',
-      letterSpacing:'1px',textTransform:'uppercase' as const,
-      whiteSpace:'nowrap' as const,
-      flexShrink:0
+    Tipo de contenido <span style={{color:'var(--err)'}}>*</span>
+    <span style={{
+      color:'var(--t3)',
+      fontWeight:500,
+      textTransform:'none' as const,
+      letterSpacing:0,
+      marginLeft:'6px',
+      fontSize:'9px'
     }}>
-      Tipo de contenido <span style={{color:'var(--err)'}}>*</span>
-    </label>
-    <select
-      value={tipoContenido}
-      onChange={e=>setTipoContenido(e.target.value)}
-      style={{
-        flex:1,
-        minWidth: isMobile ? '100%' : '200px',
-        background:'rgba(12,16,24,0.9)',
-        border:'1px solid rgba(240,246,252,0.12)',
-        borderRadius:'8px',
-        padding:'7px 10px',
-        color:'var(--t1)',
-        fontSize:'12px',
-        outline:'none',
-        fontFamily:'inherit',
-        cursor:'pointer',
-        WebkitAppearance:'none' as const,
-        appearance:'none' as const,
-        backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e")`,
-        backgroundRepeat:'no-repeat',
-        backgroundPosition:'right 8px center',
-        paddingRight:'28px'
-      }}
-    >
-      <option value="" disabled style={{background:'#0c1018',color:'var(--t3)'}}>— Selecciona —</option>
-      <option value="Diapositivas" style={{background:'#0c1018',color:'var(--t1)'}}>Diapositivas (PPT, slides)</option>
-      <option value="Software" style={{background:'#0c1018',color:'var(--t1)'}}>Software / pantalla compartida</option>
-      <option value="Pizarra" style={{background:'#0c1018',color:'var(--t1)'}}>Pizarra digital / anotaciones</option>
-      <option value="Sin pantalla" style={{background:'#0c1018',color:'var(--t1)'}}>Sin pantalla (solo cámara)</option>
-    </select>
+      (marca todas las que aplican)
+    </span>
   </div>
 
-  {/* 2 checkboxes en fila — texto chico para que entren juntos */}
+  {/* 4 checkboxes tipo "pill" en fila — wrap automático en mobile */}
+  <div style={{
+    display:'flex',
+    gap:'6px',
+    flexWrap:'wrap' as const,
+    marginBottom:'6px'
+  }}>
+    {[
+      {val:'Diapositivas', label:'Diapositivas'},
+      {val:'Software',     label:'Software'},
+      {val:'Pizarra',      label:'Pizarra'},
+      {val:'Sin pantalla', label:'Sin pantalla'}
+    ].map(opt => {
+      const activo = tipoContenido.includes(opt.val)
+      return (
+        <button
+          key={opt.val}
+          type="button"
+          onClick={() => toggleTipo(opt.val)}
+          style={{
+            display:'flex',
+            alignItems:'center',
+            gap:'5px',
+            padding:'5px 10px',
+            background: activo ? 'rgba(0,168,232,0.15)' : 'rgba(12,16,24,0.6)',
+            border:`1px solid ${activo ? 'var(--c)' : 'rgba(240,246,252,0.12)'}`,
+            borderRadius:'7px',
+            color: activo ? 'var(--c)' : 'var(--t2)',
+            fontSize:'11px',
+            fontWeight: activo ? 700 : 500,
+            cursor:'pointer',
+            transition:'all .15s',
+            fontFamily:'inherit'
+          }}
+        >
+          <span style={{
+            width:'12px',height:'12px',
+            borderRadius:'3px',
+            border:`1.5px solid ${activo ? 'var(--c)' : 'rgba(240,246,252,0.25)'}`,
+            background: activo ? 'var(--c)' : 'transparent',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            flexShrink:0
+          }}>
+            {activo && (
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            )}
+          </span>
+          {opt.label}
+        </button>
+      )
+    })}
+  </div>
+
+  {/* 2 checkboxes pedagógicos — mismo estilo */}
   <div style={{
     display:'flex',
     gap:'12px',
     flexWrap:'wrap' as const,
     fontSize:'11px',
     color:'var(--t2)',
-    paddingTop:'2px'
+    paddingTop:'4px',
+    borderTop:'1px solid rgba(240,246,252,0.06)',
+    marginTop:'2px'
   }}>
     <label style={{
       display:'flex',alignItems:'center',gap:'5px',
