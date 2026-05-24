@@ -462,71 +462,95 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                       style={{...inputStyle,padding:'10px 12px 10px 32px'}}/>
                   </div>
                 </div>
-{/* ⚙️ Configuración del procesamiento (v13 filtros) */}
+{/* ⚙️ Configuración del procesamiento (v13 filtros) — COMPACTO */}
 <div style={{
-  marginBottom: isMobile ? '10px' : '14px',
-  padding: isMobile ? '10px' : '12px',
+  marginBottom: isMobile ? '8px' : '12px',
+  padding: '8px 10px',
   background: 'rgba(0,168,232,.04)',
   border: `1px solid ${tipoContenido ? 'rgba(0,168,232,.18)' : 'rgba(255,70,100,.3)'}`,
   borderRadius: '10px',
   transition: 'border-color .2s'
 }}>
-  {/* Tipo de contenido — DROPDOWN OBLIGATORIO */}
-  <div style={{marginBottom: '8px'}}>
+  {/* Dropdown tipo contenido — inline label + select, 1 sola línea */}
+  <div style={{
+    display:'flex',
+    alignItems:'center',
+    gap:'8px',
+    marginBottom:'6px',
+    flexWrap: isMobile ? 'wrap' as const : 'nowrap' as const
+  }}>
     <label style={{
       fontSize:'10px',fontWeight:700,
       color: tipoContenido ? 'var(--t3)' : 'var(--err)',
-      letterSpacing:'1.5px',textTransform:'uppercase' as const,
-      display:'block',marginBottom:'5px'
+      letterSpacing:'1px',textTransform:'uppercase' as const,
+      whiteSpace:'nowrap' as const,
+      flexShrink:0
     }}>
       Tipo de contenido <span style={{color:'var(--err)'}}>*</span>
     </label>
     <select
       value={tipoContenido}
       onChange={e=>setTipoContenido(e.target.value)}
-      style={{...inputStyle, padding:'9px 12px', fontSize:'13px', cursor:'pointer'}}
+      style={{
+        flex:1,
+        minWidth: isMobile ? '100%' : '200px',
+        background:'rgba(12,16,24,0.9)',
+        border:'1px solid rgba(240,246,252,0.12)',
+        borderRadius:'8px',
+        padding:'7px 10px',
+        color:'var(--t1)',
+        fontSize:'12px',
+        outline:'none',
+        fontFamily:'inherit',
+        cursor:'pointer',
+        WebkitAppearance:'none' as const,
+        appearance:'none' as const,
+        backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0aec0' stroke-width='2'%3e%3cpolyline points='6 9 12 15 18 9'/%3e%3c/svg%3e")`,
+        backgroundRepeat:'no-repeat',
+        backgroundPosition:'right 8px center',
+        paddingRight:'28px'
+      }}
     >
-      <option value="" disabled>— Selecciona qué muestra tu video —</option>
-      <option value="Diapositivas">Diapositivas (PPT, slides)</option>
-      <option value="Software">Software o pantalla compartida (Excel, sistemas)</option>
-      <option value="Pizarra">Pizarra digital o anotaciones en vivo</option>
-      <option value="Sin pantalla">Sin pantalla (solo cámara al docente)</option>
+      <option value="" disabled style={{background:'#0c1018',color:'var(--t3)'}}>— Selecciona —</option>
+      <option value="Diapositivas" style={{background:'#0c1018',color:'var(--t1)'}}>Diapositivas (PPT, slides)</option>
+      <option value="Software" style={{background:'#0c1018',color:'var(--t1)'}}>Software / pantalla compartida</option>
+      <option value="Pizarra" style={{background:'#0c1018',color:'var(--t1)'}}>Pizarra digital / anotaciones</option>
+      <option value="Sin pantalla" style={{background:'#0c1018',color:'var(--t1)'}}>Sin pantalla (solo cámara)</option>
     </select>
   </div>
 
-  {/* 2 checkboxes en FILA HORIZONTAL — wrap en mobile si no caben */}
+  {/* 2 checkboxes en fila — texto chico para que entren juntos */}
   <div style={{
     display:'flex',
-    gap: isMobile ? '8px' : '12px',
+    gap:'12px',
     flexWrap:'wrap' as const,
-    fontSize:'12px',
-    color:'var(--t2)'
+    fontSize:'11px',
+    color:'var(--t2)',
+    paddingTop:'2px'
   }}>
     <label style={{
-      display:'flex',alignItems:'center',gap:'6px',
-      cursor:'pointer',userSelect:'none' as const,
-      padding:'4px 0'
+      display:'flex',alignItems:'center',gap:'5px',
+      cursor:'pointer',userSelect:'none' as const
     }}>
       <input
         type="checkbox"
         checked={mantenerInteracciones}
         onChange={e=>setMantenerInteracciones(e.target.checked)}
-        style={{cursor:'pointer', accentColor:'var(--c)'}}
+        style={{cursor:'pointer', accentColor:'var(--c)', width:'13px', height:'13px'}}
       />
       <span>Mantener interacciones con alumnos</span>
     </label>
     <label style={{
-      display:'flex',alignItems:'center',gap:'6px',
-      cursor:'pointer',userSelect:'none' as const,
-      padding:'4px 0'
+      display:'flex',alignItems:'center',gap:'5px',
+      cursor:'pointer',userSelect:'none' as const
     }}>
       <input
         type="checkbox"
         checked={permitirCapsulasLargas}
         onChange={e=>setPermitirCapsulasLargas(e.target.checked)}
-        style={{cursor:'pointer', accentColor:'var(--c)'}}
+        style={{cursor:'pointer', accentColor:'var(--c)', width:'13px', height:'13px'}}
       />
-      <span>Permitir cápsulas largas si el tema lo exige</span>
+      <span>Permitir cápsulas largas</span>
     </label>
   </div>
 </div>
