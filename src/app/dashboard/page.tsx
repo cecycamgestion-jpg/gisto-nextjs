@@ -20,16 +20,24 @@ const PROGRESS_MSGS = [
   'Generando documentos Word...','Empaquetando tu curso...',
   'Casi listo...','Un momento más...'
 ]
-const ERRORES_CORTE = ['Corte muy temprano','Corte muy tardío','Mezcla de temas']
+const ERRORES_CORTE = [
+  { id: 'corto_despues', label: 'Debió cortar antes (es muy larga)' },
+  { id: 'corto_antes',   label: 'Debió cortar después (es muy corta)' },
+  { id: 'mezcla_temas',  label: 'Trata más de un tema (debería ser dos cápsulas)' }
+]
 
 type ValorCorte = 'bien' | 'malo' | null
-interface EstadoCapsula { val: ValorCorte; err: string | null }
+interface EstadoCapsula {
+  val: ValorCorte
+  errores: string[]   // ahora es array (múltiples checkboxes)
+}
 interface FeedbackVideo { [capId: string]: EstadoCapsula }
 
 function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
   const f = record.fields || {}
   const [abierto, setAbierto] = useState(false)
   const [estado, setEstado] = useState<FeedbackVideo>({})
+  const [comentarioGlobal, setComentarioGlobal] = useState('')
   const [enviado, setEnviado] = useState(!!(f.Calidad_Feedback && f.Calidad_Feedback !== ''))
   const [enviando, setEnviando] = useState(false)
 
@@ -37,31 +45,62 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
 
   useEffect(() => {
     const init: FeedbackVideo = {}
-    capsulas.forEach(c => { init[c.id] = { val: null, err: null } })
+    capsulas.forEach(c => { init[c.id] = { val: null, errores: [] } })
     setEstado(init)
   }, [modulos])
 
   const setVal = (capId: string, val: ValorCorte) =>
-    setEstado(prev => ({ ...prev, [capId]: { val, err: val === 'bien' ? null : prev[capId]?.err ?? null } }))
+    setEstado(prev => ({
+      ...prev,
+      [capId]: {
+        val,
+        errores: val === 'bien' ? [] : prev[capId]?.errores ?? []
+      }
+    }))
 
-  const setErr = (capId: string, err: string) =>
-    setEstado(prev => ({ ...prev, [capId]: { ...prev[capId], err } }))
+  const toggleError = (capId: string, errId: string) =>
+    setEstado(prev => {
+      const actual = prev[capId]?.errores ?? []
+      const existe = actual.includes(errId)
+      const nuevos = existe ? actual.filter(e => e !== errId) : [...actual, errId]
+      return { ...prev, [capId]: { ...prev[capId], errores: nuevos } }
+    })
 
+  // Todas respondidas: cada cápsula tiene val !== null, y las "malo" tienen al menos 1 error marcado
   const todoRespondido = capsulas.length > 0 && capsulas.every(c => {
     const s = estado[c.id]
-    return s?.val !== null && (s?.val !== 'malo' || s?.err !== null)
+    if (!s || s.val === null) return false
+    if (s.val === 'malo' && s.errores.length === 0) return false
+    return true
   })
 
   async function enviarFeedback() {
     setEnviando(true)
     const buenos = capsulas.filter(c => estado[c.id]?.val === 'bien').length
     const malos  = capsulas.filter(c => estado[c.id]?.val === 'malo')
-    const resumen = malos.length === 0
+
+    // Map id -> label corto para el resumen
+    const labelCorto: Record<string,string> = {
+      'corto_despues': 'cortar antes',
+      'corto_antes':   'cortar después',
+      'mezcla_temas':  'mezcla de temas'
+    }
+
+    let resumen = malos.length === 0
       ? `${buenos} correctas`
-      : `${buenos} correctas · ${malos.length} con error: ${malos.map(c => `${c.id}:${estado[c.id].err}`).join(', ')}`
+      : `${buenos} correctas · ${malos.length} con error: ${malos.map(c => {
+          const errs = (estado[c.id].errores || []).map(e => labelCorto[e] || e).join('+')
+          return `${c.id}:${errs}`
+        }).join(', ')}`
+
+    if (comentarioGlobal.trim()) {
+      resumen += ` | Nota: ${comentarioGlobal.trim().slice(0, 300)}`
+    }
+
     try {
       await fetch('/api/airtable/feedback', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ record_id: record.id, feedback: resumen })
       })
     } catch {}
@@ -96,11 +135,11 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
       {abierto && (
         <div style={{ borderTop: '1px solid rgba(240,246,252,.06)', padding: '12px 14px 14px', background: 'rgba(255,255,255,.015)', borderRadius: '0 0 14px 14px' }}>
           <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '10px', lineHeight: 1.4 }}>
-            Marque cada cápsula. Solo las <span style={{ color: '#e24b4a' }}>Malo</span> necesitan detalle.
+            Marque cada cápsula. Solo las <span style={{ color: '#e24b4a' }}>Malo</span> necesitan detalle. Puede marcar varios motivos si aplican.
           </p>
 
           {capsulas.map((cap, idx) => {
-            const s = estado[cap.id] || { val: null, err: null }
+            const s = estado[cap.id] || { val: null, errores: [] }
             const isLast = idx === capsulas.length - 1
             return (
               <div key={cap.id}>
@@ -118,17 +157,84 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
                 </div>
                 {s.val === 'malo' && (
                   <div style={{ margin: '5px 0 6px 24px', padding: '8px 10px', background: 'rgba(226,75,75,.04)', border: '1px solid rgba(226,75,75,.15)', borderRadius: '8px' }}>
-                    <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '6px' }}>¿Qué falló?</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: '5px' }}>
-                      {ERRORES_CORTE.map(err => (
-                        <button key={err} onClick={() => setErr(cap.id, err)} style={{ padding: '3px 9px', borderRadius: '100px', border: 'none', cursor: 'pointer', fontSize: '11px', background: s.err === err ? 'rgba(226,75,75,.15)' : 'rgba(255,255,255,.04)', color: s.err === err ? '#e24b4a' : 'var(--t3)', outline: s.err === err ? '1px solid rgba(226,75,75,.35)' : '1px solid rgba(240,246,252,.08)', fontWeight: s.err === err ? 600 : 400, transition: 'all .15s' }}>{err}</button>
-                      ))}
+                    <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '6px' }}>¿Qué le faltó? (puede marcar varios)</p>
+                    <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '6px' }}>
+                      {ERRORES_CORTE.map(err => {
+                        const activo = s.errores.includes(err.id)
+                        return (
+                          <button
+                            key={err.id}
+                            onClick={() => toggleError(cap.id, err.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '6px 10px',
+                              borderRadius: '7px',
+                              border: 'none',
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              textAlign: 'left' as const,
+                              background: activo ? 'rgba(226,75,75,.15)' : 'rgba(255,255,255,.04)',
+                              color: activo ? '#e24b4a' : 'var(--t2)',
+                              outline: activo ? '1px solid rgba(226,75,75,.35)' : '1px solid rgba(240,246,252,.08)',
+                              fontWeight: activo ? 600 : 400,
+                              transition: 'all .15s'
+                            }}>
+                            <span style={{
+                              width: '14px',
+                              height: '14px',
+                              borderRadius: '3px',
+                              border: activo ? '1.5px solid #e24b4a' : '1.5px solid rgba(255,255,255,.2)',
+                              background: activo ? '#e24b4a' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              {activo && (
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <polyline points="20 6 9 17 4 12"/>
+                                </svg>
+                              )}
+                            </span>
+                            {err.label}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
               </div>
             )
           })}
+
+          {/* Campo libre opcional al final */}
+          <div style={{ marginTop: '12px' }}>
+            <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '5px' }}>¿Algo más que quieras contarnos? (opcional)</p>
+            <textarea
+              value={comentarioGlobal}
+              onChange={e => setComentarioGlobal(e.target.value)}
+              placeholder="Ej: El docente mencionó datos de contacto al final, o falta contexto al inicio..."
+              maxLength={300}
+              rows={2}
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,.03)',
+                border: '1px solid rgba(240,246,252,.08)',
+                borderRadius: '7px',
+                padding: '8px 10px',
+                fontSize: '11px',
+                color: 'var(--t1)',
+                fontFamily: 'inherit',
+                resize: 'vertical' as const,
+                outline: 'none'
+              }}
+            />
+            <div style={{ fontSize: '9px', color: 'var(--t3)', textAlign: 'right' as const, marginTop: '2px' }}>
+              {comentarioGlobal.length}/300
+            </div>
+          </div>
 
           <button onClick={enviarFeedback} disabled={!todoRespondido || enviando} style={{ marginTop: '12px', width: '100%', padding: '9px', background: todoRespondido ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'rgba(0,168,232,.15)', color: todoRespondido ? '#000' : 'rgba(255,255,255,.3)', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: todoRespondido ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
             {enviando ? 'Enviando...' : 'Enviar feedback →'}
