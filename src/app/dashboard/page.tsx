@@ -3,16 +3,53 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
+// v17.4: planes definitivos (en minutos)
 const MAX_CREDITOS: any = {
-  'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200,'academia':1200
+  'demo': 30, 'basico': 120, 'estandar': 720, 'premium': 1500, 'empresarial': 3600,
+  // Compatibilidad nombres viejos
+  'Free': 30, 'Demo': 30, 'Básico': 120, 'Basico': 120,
+  'Estándar': 720, 'Estandar': 720, 'Premium': 1500, 'Empresarial': 3600,
+  'Starter': 120, 'Professional': 1500, 'Profesional': 1500, 'Academia': 3600
 }
 const PLAN_COLORS: any = {
-  'Free':'#8899aa','Starter':'#00A8E8',
-  'Professional':'#00E5A0','Profesional':'#00E5A0','Academia':'#FFB020'
+  'demo': '#8899aa', 'basico': '#00A8E8', 'estandar': '#00D4FF',
+  'premium': '#00E5A0', 'empresarial': '#FFB020',
+  // Compatibilidad
+  'Demo': '#8899aa', 'Free': '#8899aa', 'Básico': '#00A8E8', 'Basico': '#00A8E8',
+  'Estándar': '#00D4FF', 'Estandar': '#00D4FF', 'Premium': '#00E5A0', 'Empresarial': '#FFB020',
+  'Starter': '#00A8E8', 'Professional': '#00E5A0', 'Profesional': '#00E5A0', 'Academia': '#FFB020'
 }
 const PLAN_BG: any = {
-  'Free':'rgba(136,153,170,.06)','Starter':'rgba(0,168,232,.08)',
-  'Professional':'rgba(0,229,160,.08)','Profesional':'rgba(0,229,160,.08)','Academia':'rgba(255,176,32,.08)'
+  'demo': 'rgba(136,153,170,.06)', 'basico': 'rgba(0,168,232,.08)',
+  'estandar': 'rgba(0,212,255,.08)', 'premium': 'rgba(0,229,160,.08)',
+  'empresarial': 'rgba(255,176,32,.08)',
+  // Compatibilidad
+  'Demo': 'rgba(136,153,170,.06)', 'Free': 'rgba(136,153,170,.06)',
+  'Básico': 'rgba(0,168,232,.08)', 'Basico': 'rgba(0,168,232,.08)',
+  'Estándar': 'rgba(0,212,255,.08)', 'Estandar': 'rgba(0,212,255,.08)',
+  'Premium': 'rgba(0,229,160,.08)', 'Empresarial': 'rgba(255,176,32,.08)',
+  'Starter': 'rgba(0,168,232,.08)', 'Professional': 'rgba(0,229,160,.08)',
+  'Profesional': 'rgba(0,229,160,.08)', 'Academia': 'rgba(255,176,32,.08)'
+}
+
+// v17.4: nombres bonitos para mostrar al usuario
+const PLAN_LABEL: any = {
+  'demo': 'Demo', 'basico': 'Básico', 'estandar': 'Estándar',
+  'premium': 'Premium', 'empresarial': 'Empresarial',
+  'Demo': 'Demo', 'Free': 'Demo', 'Básico': 'Básico', 'Basico': 'Básico',
+  'Estándar': 'Estándar', 'Estandar': 'Estándar',
+  'Premium': 'Premium', 'Empresarial': 'Empresarial',
+  'Starter': 'Básico', 'Professional': 'Premium', 'Profesional': 'Premium', 'Academia': 'Empresarial'
+}
+
+// v17.4: formatea minutos como "Xh Ymin" (más legible que minutos crudos)
+function formatHorasMin(min: number): string {
+  if (!min || min <= 0) return '0 min'
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h === 0) return `${m} min`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}min`
 }
 const PROGRESS_MSGS = [
   'Transcribiendo el audio...','Analizando estructura pedagógica...',
@@ -245,7 +282,7 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
   )
 }
 
-function AnimatedNumber({ value, suffix = '' }: { value: number, suffix?: string }) {
+function AnimatedNumber({ value, suffix = '', formatter }: { value: number, suffix?: string, formatter?: (n: number) => string }) {
   const [display, setDisplay] = useState(0)
   const prevRef = useRef(0)
   useEffect(() => {
@@ -261,6 +298,7 @@ function AnimatedNumber({ value, suffix = '' }: { value: number, suffix?: string
     }
     requestAnimationFrame(animate)
   }, [value])
+  if (formatter) return <>{formatter(display)}</>
   return <>{display}{suffix}</>
 }
 
@@ -332,15 +370,15 @@ export default function Dashboard() {
     if (!u) { router.push('/login'); return }
     const parsed = JSON.parse(u)
     setUser(parsed); setCreditos(parsed.creditos || 0)
-    setCreditosMax(MAX_CREDITOS[parsed.plan] || 40)
+    setCreditosMax(MAX_CREDITOS[parsed.plan] || 30)
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
     fetch('/api/airtable/usuario').then(r => r.json()).then(data => {
       if (data.error) return
-      const credAirtable = data.creditos || 0; const plan = data.plan || 'Free'
+      const credAirtable = data.creditos || 0; const plan = data.plan || 'demo'
       // FIX: respetar deducciones pendientes — usar el menor valor entre localStorage y Airtable
       const credLocal = parsed.creditos || 0
       const cred = Math.min(credLocal, credAirtable)
-      setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan] || 40)
+      setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan] || 30)
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
       const updated = { ...parsed, creditos: cred, plan, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
       localStorage.setItem('gisto_user', JSON.stringify(updated)); setUser(updated)
@@ -396,7 +434,8 @@ export default function Dashboard() {
     return true
   })
 
-  const planActual = user?.plan || 'Free'
+  const planActual = user?.plan || 'demo'
+  const planLabel  = PLAN_LABEL[planActual] || 'Demo'
   const inicial = user?.nombre?.[0]?.toUpperCase() || 'U'
   const porcentaje = creditosMax > 0 ? Math.max(2, Math.min(100, (creditos / creditosMax) * 100)) : 2
 
@@ -427,12 +466,12 @@ export default function Dashboard() {
             <div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '3px', transition: 'width .5s ease', boxShadow: '0 0 6px rgba(0,168,232,.4)' }}/>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' }}>
-            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{creditos} min</strong>
-            <span style={{ color: '#667788' }}>/ {creditosMax} min</span>
+            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{formatHorasMin(creditos)}</strong>
+            <span style={{ color: '#667788' }}>/ {formatHorasMin(creditosMax)}</span>
           </div>
           <div style={{ marginTop: '6px' }}>
             <Link href="/planes" style={{ textDecoration: 'none' }}>
-              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: PLAN_COLORS[planActual]||'#00A8E8', background: PLAN_BG[planActual]||'rgba(0,168,232,.08)', border: `1px solid ${PLAN_COLORS[planActual]||'#00A8E8'}30` }}>{planActual}</span>
+              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: PLAN_COLORS[planActual]||'#00A8E8', background: PLAN_BG[planActual]||'rgba(0,168,232,.08)', border: `1px solid ${PLAN_COLORS[planActual]||'#00A8E8'}30` }}>{planLabel}</span>
             </Link>
           </div>
         </div>
@@ -442,7 +481,7 @@ export default function Dashboard() {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '13px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{user?.nombre || 'Usuario'}</div>
-            <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{planActual}</div>
+            <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{planLabel}</div>
           </div>
         </Link>
         <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', color: 'var(--err)', background: 'none', border: 'none', borderRadius: '9px', marginTop: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', width: '100%' }}>
@@ -463,14 +502,14 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          {isMobile && <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}><span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{creditos} min</span><div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '3px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/></div></Link>}
+          {isMobile && <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}><span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{formatHorasMin(creditos)}</span><div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '3px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/></div></Link>}
           {!isMobile && <Link href="/upload" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', color: '#000', padding: '9px 18px', borderRadius: '9px', fontWeight: 800, fontSize: '13px', textDecoration: 'none', boxShadow: '0 4px 14px rgba(0,168,232,.3)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nuevo video</Link>}
         </div>
 
         <div style={{ padding: isMobile ? '14px' : '24px 28px', flex: 1 }}>
           <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: isMobile ? '14px' : '24px' }}>
             {[
-              { label: 'Créditos disponibles', sublabel: planActual, color: PLAN_COLORS[planActual]||'#00A8E8', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: ' min', extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: PLAN_COLORS[planActual]||'#00A8E8', borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: PLAN_COLORS[planActual]||'#00A8E8' }}>{creditos} min</span><span>{creditosMax} min</span></div></div>) },
+              { label: 'Créditos disponibles', sublabel: planLabel, color: PLAN_COLORS[planActual]||'#00A8E8', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: '', formatValue: formatHorasMin, extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: PLAN_COLORS[planActual]||'#00A8E8', borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: PLAN_COLORS[planActual]||'#00A8E8' }}>{formatHorasMin(creditos)}</span><span>{formatHorasMin(creditosMax)}</span></div></div>) },
               { label: 'Videos procesados', sublabel: 'Total acumulado', color: '#00E5A0', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: loading ? null : videos.length, suffix: '', extra: null },
               { label: 'Módulos generados', sublabel: 'En todos tus videos', color: '#A078FF', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: loading ? null : modulos, suffix: '', extra: null },
               { label: enProceso > 0 ? 'Videos en proceso' : 'Cola de proceso', sublabel: enProceso > 0 ? 'Motor activo' : 'Motor libre', color: enProceso > 0 ? '#FFB020' : '#00E5A0', icon: enProceso > 0 ? 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2' : 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3', value: loading ? null : enProceso, suffix: '', extra: null }
@@ -485,7 +524,7 @@ export default function Dashboard() {
                     <span style={{ fontSize: '10px', fontWeight: 700, color: s.color, background: `${s.color}12`, border: `1px solid ${s.color}25`, padding: '3px 8px', borderRadius: '100px', whiteSpace: 'nowrap' as const }}>{s.sublabel}</span>
                   </div>
                   <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '28px' : '36px', fontWeight: 900, lineHeight: 1, marginBottom: '4px', color: '#f0f6fc', letterSpacing: '-1px' }}>
-                    {s.value === null ? <span style={{ color: '#334455', fontSize: '20px' }}>—</span> : <AnimatedNumber value={statsVisible ? (s.value as number) : 0} suffix={s.suffix}/>}
+                    {s.value === null ? <span style={{ color: '#334455', fontSize: '20px' }}>—</span> : <AnimatedNumber value={statsVisible ? (s.value as number) : 0} suffix={s.suffix} formatter={(s as any).formatValue}/>}
                   </div>
                   <div style={{ fontSize: '11px', color: '#667788', fontWeight: 500 }}>{s.label}</div>
                   {s.extra}
@@ -531,12 +570,15 @@ export default function Dashboard() {
             const estado = f.Estado || 'Pendiente'
             const done = estado === 'Completado'
             const processing = estado === 'Procesando' || estado === 'Pendiente'
+            // v17.4: estado intermedio "En revisión" — Word ya disponible, ZIP pendiente máx 12h
+            const enRevision = estado === 'En revisión' || estado === 'En revision' || f.Estado_Cliente === 'revision_final'
+            const wordAdelantado = f.Word_Adelantado_URL || f.word_adelantado_url || ''
             const durText = formatDuracion(f)
             return (
-              <div key={v.id} style={{ background: done ? 'linear-gradient(135deg,rgba(0,229,160,.04),rgba(12,16,24,.8))' : processing ? 'linear-gradient(135deg,rgba(255,176,32,.04),rgba(12,16,24,.8))' : 'var(--s1)', border: `1px solid ${done ? 'rgba(0,229,160,.15)' : processing ? 'rgba(255,176,32,.15)' : 'var(--b)'}`, borderRadius: '14px', marginBottom: '10px', overflow: 'hidden', transition: 'all .3s' }}>
+              <div key={v.id} style={{ background: done ? 'linear-gradient(135deg,rgba(0,229,160,.04),rgba(12,16,24,.8))' : enRevision ? 'linear-gradient(135deg,rgba(160,120,255,.04),rgba(12,16,24,.8))' : processing ? 'linear-gradient(135deg,rgba(255,176,32,.04),rgba(12,16,24,.8))' : 'var(--s1)', border: `1px solid ${done ? 'rgba(0,229,160,.15)' : enRevision ? 'rgba(160,120,255,.18)' : processing ? 'rgba(255,176,32,.15)' : 'var(--b)'}`, borderRadius: '14px', marginBottom: '10px', overflow: 'hidden', transition: 'all .3s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '14px', padding: isMobile ? '12px 14px' : '14px 16px' }}>
-                  <div style={{ width: isMobile ? '36px' : '44px', height: isMobile ? '30px' : '36px', borderRadius: '8px', flexShrink: 0, background: done ? 'rgba(0,229,160,.08)' : processing ? 'rgba(255,176,32,.08)' : 'var(--s2)', border: `1px solid ${done ? 'rgba(0,229,160,.2)' : processing ? 'rgba(255,176,32,.2)' : 'var(--b)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={done ? 'var(--ok)' : processing ? 'var(--warn)' : 'var(--t3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                  <div style={{ width: isMobile ? '36px' : '44px', height: isMobile ? '30px' : '36px', borderRadius: '8px', flexShrink: 0, background: done ? 'rgba(0,229,160,.08)' : enRevision ? 'rgba(160,120,255,.1)' : processing ? 'rgba(255,176,32,.08)' : 'var(--s2)', border: `1px solid ${done ? 'rgba(0,229,160,.2)' : enRevision ? 'rgba(160,120,255,.25)' : processing ? 'rgba(255,176,32,.2)' : 'var(--b)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={done ? 'var(--ok)' : enRevision ? '#A078FF' : processing ? 'var(--warn)' : 'var(--t3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: isMobile ? '12px' : '14px', fontWeight: 600, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '3px' }}>{f.VideoID || 'Sin nombre'}</div>
@@ -547,16 +589,32 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <span style={{ padding: '4px 9px', borderRadius: '100px', fontSize: '10px', fontWeight: 700, background: done ? 'rgba(0,229,160,.1)' : processing ? 'rgba(255,176,32,.1)' : 'rgba(255,255,255,.05)', color: done ? 'var(--ok)' : processing ? 'var(--warn)' : 'var(--t2)', border: `1px solid ${done ? 'rgba(0,229,160,.25)' : processing ? 'rgba(255,176,32,.25)' : 'rgba(255,255,255,.1)'}` }}>{estado}</span>
+                    <span style={{ padding: '4px 9px', borderRadius: '100px', fontSize: '10px', fontWeight: 700, background: done ? 'rgba(0,229,160,.1)' : enRevision ? 'rgba(160,120,255,.12)' : processing ? 'rgba(255,176,32,.1)' : 'rgba(255,255,255,.05)', color: done ? 'var(--ok)' : enRevision ? '#A078FF' : processing ? 'var(--warn)' : 'var(--t2)', border: `1px solid ${done ? 'rgba(0,229,160,.25)' : enRevision ? 'rgba(160,120,255,.3)' : processing ? 'rgba(255,176,32,.25)' : 'rgba(255,255,255,.1)'}` }}>{enRevision ? 'En revisión' : estado}</span>
                     {done && (f.Resultado || f.Zip_Key) && (
                       <button onClick={() => descargarZip(v)} disabled={descargando === v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', border: '1px solid var(--b)', color: 'var(--t2)', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', opacity: descargando === v.id ? 0.5 : 1 }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                         {descargando === v.id ? '...' : 'ZIP'}
                       </button>
                     )}
+                    {enRevision && wordAdelantado && (
+                      <a href={wordAdelantado} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', border: '1px solid rgba(160,120,255,.3)', color: '#A078FF', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textDecoration: 'none' }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Word
+                      </a>
+                    )}
                   </div>
                 </div>
                 {processing && <AnimatedProgress createdAt={f?.['Created time'] || v.createdTime || v.id}/>}
+                {enRevision && (
+                  <div style={{ padding: '0 16px 14px' }}>
+                    <div style={{ background: 'rgba(160,120,255,.05)', border: '1px solid rgba(160,120,255,.15)', borderRadius: '10px', padding: '12px 14px' }}>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#A078FF', marginBottom: '4px' }}>Revisión final de calidad en curso</div>
+                      <div style={{ fontSize: '11px', color: 'var(--t2)', lineHeight: 1.55 }}>
+                        Tu documento Word está listo para descargar. Las cápsulas de video estarán disponibles en máximo 12 horas, tras una revisión manual sin costo adicional.
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {done && (
                   <>
                     <div style={{ padding: '0 14px 12px', display: 'flex', gap: '5px', flexWrap: 'wrap' as const }}>
