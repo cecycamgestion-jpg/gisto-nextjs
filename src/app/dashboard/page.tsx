@@ -2,71 +2,62 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import {
+  PLANS,
+  PLAN_COLORS,
+  PLAN_BG,
+  PLAN_MAX_MINUTOS,
+  resolverPlan,
+  formatHorasMin,
+  type PlanId
+} from '@/lib/plans'
 
-// v17.4: planes definitivos (en minutos)
-const MAX_CREDITOS: any = {
-  'demo': 30, 'basico': 120, 'estandar': 720, 'premium': 1500, 'empresarial': 3600,
-  // Compatibilidad nombres viejos
-  'Free': 30, 'Demo': 30, 'Básico': 120, 'Basico': 120,
-  'Estándar': 720, 'Estandar': 720, 'Premium': 1500, 'Empresarial': 3600,
-  'Starter': 120, 'Professional': 1500, 'Profesional': 1500, 'Academia': 3600
-}
-const PLAN_COLORS: any = {
-  'demo': '#8899aa', 'basico': '#00A8E8', 'estandar': '#00D4FF',
-  'premium': '#00E5A0', 'empresarial': '#FFB020',
-  // Compatibilidad
-  'Demo': '#8899aa', 'Free': '#8899aa', 'Básico': '#00A8E8', 'Basico': '#00A8E8',
-  'Estándar': '#00D4FF', 'Estandar': '#00D4FF', 'Premium': '#00E5A0', 'Empresarial': '#FFB020',
-  'Starter': '#00A8E8', 'Professional': '#00E5A0', 'Profesional': '#00E5A0', 'Academia': '#FFB020'
-}
-const PLAN_BG: any = {
-  'demo': 'rgba(136,153,170,.06)', 'basico': 'rgba(0,168,232,.08)',
-  'estandar': 'rgba(0,212,255,.08)', 'premium': 'rgba(0,229,160,.08)',
-  'empresarial': 'rgba(255,176,32,.08)',
-  // Compatibilidad
-  'Demo': 'rgba(136,153,170,.06)', 'Free': 'rgba(136,153,170,.06)',
-  'Básico': 'rgba(0,168,232,.08)', 'Basico': 'rgba(0,168,232,.08)',
-  'Estándar': 'rgba(0,212,255,.08)', 'Estandar': 'rgba(0,212,255,.08)',
-  'Premium': 'rgba(0,229,160,.08)', 'Empresarial': 'rgba(255,176,32,.08)',
-  'Starter': 'rgba(0,168,232,.08)', 'Professional': 'rgba(0,229,160,.08)',
-  'Profesional': 'rgba(0,229,160,.08)', 'Academia': 'rgba(255,176,32,.08)'
-}
+// ─────────────────────────────────────────────────────────────
+// Dashboard de usuario
+//
+// Fuente única para nombres/colores/máximos de plan: lib/plans.ts.
+// NO redefinir MAX_CREDITOS/PLAN_COLORS aquí — ya estaban con nombres
+// viejos (Free/Starter/Professional/Academia) y rompían la barra cuando
+// el usuario tenía plan 'premium' o 'estandar' (caían a default 40min).
+// ─────────────────────────────────────────────────────────────
 
-// v17.4: nombres bonitos para mostrar al usuario
-const PLAN_LABEL: any = {
-  'demo': 'Demo', 'basico': 'Básico', 'estandar': 'Estándar',
-  'premium': 'Premium', 'empresarial': 'Empresarial',
-  'Demo': 'Demo', 'Free': 'Demo', 'Básico': 'Básico', 'Basico': 'Básico',
-  'Estándar': 'Estándar', 'Estandar': 'Estándar',
-  'Premium': 'Premium', 'Empresarial': 'Empresarial',
-  'Starter': 'Básico', 'Professional': 'Premium', 'Profesional': 'Premium', 'Academia': 'Empresarial'
-}
-
-// v17.4: formatea minutos como "Xh Ymin" (más legible que minutos crudos)
-function formatHorasMin(min: number): string {
-  if (!min || min <= 0) return '0 min'
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  if (h === 0) return `${m} min`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}min`
-}
 const PROGRESS_MSGS = [
   'Transcribiendo el audio...','Analizando estructura pedagógica...',
   'Limpiando interacciones del aula...','Aplicando corte anatómico...',
   'Generando documentos Word...','Empaquetando tu curso...',
   'Casi listo...','Un momento más...'
 ]
+
 const ERRORES_CORTE = [
   { id: 'corto_despues', label: 'Debió cortar antes (es muy larga)' },
   { id: 'corto_antes',   label: 'Debió cortar después (es muy corta)' },
   { id: 'mezcla_temas',  label: 'Trata más de un tema (debería ser dos cápsulas)' }
 ]
 
+/** Normaliza el campo Estado de Airtable. Maneja mayúsculas, tildes, espacios. */
+function normalizeEstado(raw: unknown): string {
+  if (typeof raw !== 'string') return ''
+  return raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
+}
+
+function isCompletado(estado: unknown): boolean {
+  return normalizeEstado(estado) === 'completado'
+}
+
+function isEnProceso(estado: unknown): boolean {
+  const e = normalizeEstado(estado)
+  return e === 'procesando' || e === 'pendiente'
+}
+
+function isEnRevision(estado: unknown): boolean {
+  const e = normalizeEstado(estado)
+  return e === 'en revision' || e === 'revision' || e === 'soporte'
+}
+
 type ValorCorte = 'bien' | 'malo' | null
 interface EstadoCapsula {
   val: ValorCorte
-  errores: string[]   // ahora es array (múltiples checkboxes)
+  errores: string[]
 }
 interface FeedbackVideo { [capId: string]: EstadoCapsula }
 
@@ -77,6 +68,7 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
   const [comentarioGlobal, setComentarioGlobal] = useState('')
   const [enviado, setEnviado] = useState(!!(f.Calidad_Feedback && f.Calidad_Feedback !== ''))
   const [enviando, setEnviando] = useState(false)
+  const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
 
   const capsulas = Array.from({ length: modulos || 0 }, (_, i) => ({ id: `C${i + 1}` }))
 
@@ -103,7 +95,6 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
       return { ...prev, [capId]: { ...prev[capId], errores: nuevos } }
     })
 
-  // Todas respondidas: cada cápsula tiene val !== null, y las "malo" tienen al menos 1 error marcado
   const todoRespondido = capsulas.length > 0 && capsulas.every(c => {
     const s = estado[c.id]
     if (!s || s.val === null) return false
@@ -113,10 +104,10 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
 
   async function enviarFeedback() {
     setEnviando(true)
+    setErrorEnvio(null)
     const buenos = capsulas.filter(c => estado[c.id]?.val === 'bien').length
     const malos  = capsulas.filter(c => estado[c.id]?.val === 'malo')
 
-    // Map id -> label corto para el resumen
     const labelCorto: Record<string,string> = {
       'corto_despues': 'cortar antes',
       'corto_antes':   'cortar después',
@@ -135,13 +126,24 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
     }
 
     try {
-      await fetch('/api/airtable/feedback', {
+      const r = await fetch('/api/airtable/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ record_id: record.id, feedback: resumen })
       })
-    } catch {}
-    setEnviado(true); setEnviando(false); setAbierto(false)
+      if (!r.ok) {
+        // FIX: NO marcar como enviado si la API falla (Auditoría punto 14)
+        setErrorEnvio('No pudimos guardar tu feedback. Intenta otra vez en unos minutos.')
+        setEnviando(false)
+        return
+      }
+      setEnviado(true)
+      setAbierto(false)
+    } catch {
+      setErrorEnvio('No pudimos guardar tu feedback. Verifica tu conexión e intenta de nuevo.')
+    } finally {
+      setEnviando(false)
+    }
   }
 
   if (enviado) return (
@@ -246,7 +248,6 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
             )
           })}
 
-          {/* Campo libre opcional al final */}
           <div style={{ marginTop: '12px' }}>
             <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '5px' }}>¿Algo más que quieras contarnos? (opcional)</p>
             <textarea
@@ -273,6 +274,12 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
             </div>
           </div>
 
+          {errorEnvio && (
+            <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(226,75,75,.06)', border: '1px solid rgba(226,75,75,.2)', borderRadius: '7px', fontSize: '11px', color: '#e24b4a' }}>
+              {errorEnvio}
+            </div>
+          )}
+
           <button onClick={enviarFeedback} disabled={!todoRespondido || enviando} style={{ marginTop: '12px', width: '100%', padding: '9px', background: todoRespondido ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'rgba(0,168,232,.15)', color: todoRespondido ? '#000' : 'rgba(255,255,255,.3)', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: todoRespondido ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
             {enviando ? 'Enviando...' : 'Enviar feedback →'}
           </button>
@@ -282,7 +289,7 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
   )
 }
 
-function AnimatedNumber({ value, suffix = '', formatter }: { value: number, suffix?: string, formatter?: (n: number) => string }) {
+function AnimatedNumber({ value, suffix = '' }: { value: number, suffix?: string }) {
   const [display, setDisplay] = useState(0)
   const prevRef = useRef(0)
   useEffect(() => {
@@ -298,17 +305,19 @@ function AnimatedNumber({ value, suffix = '', formatter }: { value: number, suff
     }
     requestAnimationFrame(animate)
   }, [value])
-  if (formatter) return <>{formatter(display)}</>
   return <>{display}{suffix}</>
 }
 
-function AnimatedProgress({ createdAt }: { createdAt: string }) {
+function AnimatedProgress({ createdAt }: { createdAt: string | null | undefined }) {
   const [msgIdx, setMsgIdx] = React.useState(0)
   React.useEffect(() => {
+    // FIX: validar fecha — antes se pasaba v.id como fallback y new Date('recXXX') = Invalid Date
+    const parsed = createdAt ? new Date(createdAt).getTime() : NaN
+    const base = Number.isFinite(parsed) ? parsed : Date.now()
+    setMsgIdx(Math.floor((Date.now() - base) / 20000) % PROGRESS_MSGS.length)
     const interval = setInterval(() => {
-      const elapsed = Date.now() - new Date(createdAt).getTime()
-      setMsgIdx(Math.floor(elapsed / 20000) % PROGRESS_MSGS.length)
-    }, 1000)
+      setMsgIdx(prev => (prev + 1) % PROGRESS_MSGS.length)
+    }, 20000)
     return () => clearInterval(interval)
   }, [createdAt])
   return (
@@ -320,6 +329,9 @@ function AnimatedProgress({ createdAt }: { createdAt: string }) {
         </div>
         <div style={{ height: '3px', background: 'rgba(255,255,255,.06)', borderRadius: '2px', overflow: 'hidden', position: 'relative' as const }}>
           <div style={{ position: 'absolute' as const, height: '100%', width: '40%', background: 'linear-gradient(90deg,transparent,var(--warn),transparent)', borderRadius: '2px', animation: 'indeterminate 1.8s ease-in-out infinite' }}/>
+        </div>
+        <div style={{ marginTop: '8px', fontSize: '10px', color: 'var(--t3)', lineHeight: 1.4 }}>
+          Te avisaremos por correo cuando esté listo.
         </div>
       </div>
     </div>
@@ -333,13 +345,17 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [creditos, setCreditos] = useState(0)
-  const [creditosMax, setCreditosMax] = useState(40)
+  const [planId, setPlanId] = useState<PlanId>('demo')
+  const [creditosMax, setCreditosMax] = useState(PLAN_MAX_MINUTOS.demo)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [descargando, setDescargando] = useState<string | null>(null)
+  const [erroresDescarga, setErroresDescarga] = useState<Record<string, string>>({})
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [statsVisible, setStatsVisible] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
+  const fetchingRef = useRef(false)
+  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -356,41 +372,74 @@ export default function Dashboard() {
     return () => obs.disconnect()
   }, [loading])
 
+  // FIX: AbortController + bandera para no acumular requests si la API es lenta (Auditoría punto 18)
   const fetchVideos = useCallback(async () => {
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+    abortRef.current?.abort()
+    const ctrl = new AbortController()
+    abortRef.current = ctrl
     try {
-      const r = await fetch('/api/airtable/videos')
+      const r = await fetch('/api/airtable/videos', { signal: ctrl.signal })
       const data = await r.json()
       if (data.records) setVideos(data.records)
+    } catch {
+      // ignorar AbortError silencioso
+    } finally {
       setLoading(false)
-    } catch { setLoading(false) }
+      fetchingRef.current = false
+    }
   }, [])
 
   useEffect(() => {
-    const u = localStorage.getItem('gisto_user')
-    if (!u) { router.push('/login'); return }
-    const parsed = JSON.parse(u)
-    setUser(parsed); setCreditos(parsed.creditos || 0)
-    setCreditosMax(MAX_CREDITOS[parsed.plan] || 30)
+    // FIX: try/catch en JSON.parse de localStorage (Auditoría punto 19)
+    let parsed: any = null
+    try {
+      const u = localStorage.getItem('gisto_user')
+      if (!u) { router.push('/login'); return }
+      parsed = JSON.parse(u)
+    } catch {
+      try { localStorage.removeItem('gisto_user') } catch {}
+      router.push('/login')
+      return
+    }
+
+    const planInicial = resolverPlan(parsed.plan)
+    setUser(parsed)
+    setCreditos(parsed.creditos || 0)
+    setPlanId(planInicial)
+    setCreditosMax(PLAN_MAX_MINUTOS[planInicial])
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
+
+    // FIX: el servidor manda. Eliminamos Math.min(local, airtable) que dejaba
+    // créditos visualmente menores tras una compra (Auditoría puntos 8, 39).
     fetch('/api/airtable/usuario').then(r => r.json()).then(data => {
       if (data.error) return
-      const credAirtable = data.creditos || 0; const plan = data.plan || 'demo'
-      // FIX: respetar deducciones pendientes — usar el menor valor entre localStorage y Airtable
-      const credLocal = parsed.creditos || 0
-      const cred = Math.min(credLocal, credAirtable)
-      setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan] || 30)
+      const credAirtable = data.creditos || 0
+      const planAirtable = resolverPlan(data.plan)
+      setCreditos(credAirtable)
+      setPlanId(planAirtable)
+      setCreditosMax(PLAN_MAX_MINUTOS[planAirtable])
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
-      const updated = { ...parsed, creditos: cred, plan, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
-      localStorage.setItem('gisto_user', JSON.stringify(updated)); setUser(updated)
+      try {
+        const updated = { ...parsed, creditos: credAirtable, plan: planAirtable, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
+        localStorage.setItem('gisto_user', JSON.stringify(updated))
+        setUser(updated)
+      } catch {}
     }).catch(() => {})
+
     fetchVideos()
     const interval = setInterval(fetchVideos, 8000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      abortRef.current?.abort()
+    }
   }, [fetchVideos, router])
 
   async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    localStorage.removeItem('gisto_user'); router.push('/login')
+    try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
+    try { localStorage.removeItem('gisto_user') } catch {}
+    router.push('/login')
   }
 
   async function descargarZip(record: any) {
@@ -399,12 +448,21 @@ export default function Dashboard() {
     if (!zipKey && f.Resultado) { window.open(f.Resultado, '_blank'); return }
     if (!zipKey) return
     setDescargando(record.id)
+    setErroresDescarga(prev => ({ ...prev, [record.id]: '' }))
     try {
       const r = await fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zip_key: zipKey }) })
       const data = await r.json()
-      if (data.download_url) window.open(data.download_url, '_blank')
-    } catch {}
-    finally { setDescargando(null) }
+      if (r.ok && data.download_url) {
+        window.open(data.download_url, '_blank')
+      } else {
+        // FIX: no fallar silenciosamente (Auditoría punto 13)
+        setErroresDescarga(prev => ({ ...prev, [record.id]: 'No pudimos generar el enlace. Intenta de nuevo o contacta soporte.' }))
+      }
+    } catch {
+      setErroresDescarga(prev => ({ ...prev, [record.id]: 'No pudimos generar el enlace. Intenta de nuevo o contacta soporte.' }))
+    } finally {
+      setDescargando(null)
+    }
   }
 
   function formatDuracion(f: any) {
@@ -424,20 +482,33 @@ export default function Dashboard() {
     return `Hace ${days}d`
   }
 
-  const hayProcesando = videos.some(v => { const e = v.fields?.Estado?.toLowerCase(); return e === 'procesando' || e === 'pendiente' })
-  const enProceso = videos.filter(v => { const e = v.fields?.Estado?.toLowerCase(); return e === 'procesando' || e === 'pendiente' }).length
-  const modulos = videos.reduce((a, v) => a + (v.fields?.Modulos_detectados || 0), 0)
+  const hayProcesando = videos.some(v => isEnProceso(v.fields?.Estado))
+  const enProceso = videos.filter(v => isEnProceso(v.fields?.Estado)).length
+
+  // FIX: "Videos procesados" solo cuenta los completados (Auditoría punto 10)
+  const completados = videos.filter(v => isCompletado(v.fields?.Estado)).length
+  const modulos = videos
+    .filter(v => isCompletado(v.fields?.Estado))
+    .reduce((a, v) => a + (v.fields?.Modulos_detectados || 0), 0)
+
   const filtrados = videos.filter(v => {
-    const e = v.fields?.Estado?.toLowerCase() || ''
-    if (filtro === 'completados') return e === 'completado'
-    if (filtro === 'proceso') return e === 'procesando' || e === 'pendiente'
+    const e = v.fields?.Estado
+    if (filtro === 'completados') return isCompletado(e)
+    if (filtro === 'proceso') return isEnProceso(e)
     return true
   })
 
-  const planActual = user?.plan || 'demo'
-  const planLabel  = PLAN_LABEL[planActual] || 'Demo'
+  const planActual = PLANS[planId]
+  const planLabel = planActual.nombre
+  const planColor = PLAN_COLORS[planId]
+  const planBgColor = PLAN_BG[planId]
   const inicial = user?.nombre?.[0]?.toUpperCase() || 'U'
-  const porcentaje = creditosMax > 0 ? Math.max(2, Math.min(100, (creditos / creditosMax) * 100)) : 2
+
+  // FIX: si créditos = 0 la barra debe ser 0%, no Math.max(2, ...) que dejaba
+  // barra visualmente llena cuando saldo era 0 (Auditoría punto 9)
+  const porcentaje = creditos <= 0 || creditosMax <= 0
+    ? 0
+    : Math.min(100, (creditos / creditosMax) * 100)
 
   const NavItem = ({ href, label, icon, active, badge }: any) => (
     <Link href={href} onClick={() => isMobile && setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', color: active ? 'var(--t1)' : 'var(--t2)', textDecoration: 'none', borderRadius: '9px', marginBottom: '2px', fontSize: '14px', fontWeight: 500, background: active ? 'rgba(0,168,232,0.08)' : 'transparent', border: active ? '1px solid var(--b)' : '1px solid transparent', transition: 'all .2s' }}>
@@ -463,15 +534,15 @@ export default function Dashboard() {
         <div style={{ marginTop: 'auto', background: 'rgba(0,168,232,.06)', border: '1px solid var(--b)', borderRadius: '12px', padding: '14px' }}>
           <div style={{ fontSize: '11px', color: 'var(--t2)', marginBottom: '8px' }}>Créditos disponibles</div>
           <div style={{ height: '6px', background: 'rgba(0,168,232,.12)', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px', position: 'relative' as const }}>
-            <div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '3px', transition: 'width .5s ease', boxShadow: '0 0 6px rgba(0,168,232,.4)' }}/>
+            <div style={{ height: '100%', width: `${porcentaje}%`, background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '3px', transition: 'width .5s ease', boxShadow: porcentaje > 0 ? '0 0 6px rgba(0,168,232,.4)' : 'none' }}/>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' }}>
-            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{formatHorasMin(creditos)}</strong>
-            <span style={{ color: '#667788' }}>/ {formatHorasMin(creditosMax)}</span>
+            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{creditos} min</strong>
+            <span style={{ color: '#667788' }}>/ {creditosMax} min</span>
           </div>
           <div style={{ marginTop: '6px' }}>
             <Link href="/planes" style={{ textDecoration: 'none' }}>
-              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: PLAN_COLORS[planActual]||'#00A8E8', background: PLAN_BG[planActual]||'rgba(0,168,232,.08)', border: `1px solid ${PLAN_COLORS[planActual]||'#00A8E8'}30` }}>{planLabel}</span>
+              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: planColor, background: planBgColor, border: `1px solid ${planColor}30` }}>{planLabel}</span>
             </Link>
           </div>
         </div>
@@ -502,61 +573,39 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          {isMobile && <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}><span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{formatHorasMin(creditos)}</span><div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '3px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/></div></Link>}
+          {isMobile && <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}><span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{creditos} min</span><div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/></div></Link>}
           {!isMobile && <Link href="/upload" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', color: '#000', padding: '9px 18px', borderRadius: '9px', fontWeight: 800, fontSize: '13px', textDecoration: 'none', boxShadow: '0 4px 14px rgba(0,168,232,.3)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nuevo video</Link>}
         </div>
 
         <div style={{ padding: isMobile ? '14px' : '24px 28px', flex: 1 }}>
           <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: isMobile ? '14px' : '24px' }}>
             {[
-              { label: 'Créditos disponibles', sublabel: planLabel, color: PLAN_COLORS[planActual]||'#00A8E8', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: '', formatValue: formatHorasMin, extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: PLAN_COLORS[planActual]||'#00A8E8', borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: PLAN_COLORS[planActual]||'#00A8E8' }}>{formatHorasMin(creditos)}</span><span>{formatHorasMin(creditosMax)}</span></div></div>) },
-              { label: 'Videos procesados', sublabel: 'Total acumulado', color: '#00E5A0', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: loading ? null : videos.length, suffix: '', extra: null },
-              { label: 'Módulos generados', sublabel: 'En todos tus videos', color: '#A078FF', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: loading ? null : modulos, suffix: '', extra: null },
+              { label: 'Créditos disponibles', sublabel: planLabel, color: planColor, icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: ' min', extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, background: planColor, borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: planColor }}>{creditos} min</span><span>{creditosMax} min</span></div></div>) },
+              { label: 'Videos procesados', sublabel: 'Completados', color: '#00E5A0', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: loading ? null : completados, suffix: '', extra: null },
+              { label: 'Módulos generados', sublabel: 'En tus cursos completados', color: '#A078FF', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: loading ? null : modulos, suffix: '', extra: null },
               { label: enProceso > 0 ? 'Videos en proceso' : 'Cola de proceso', sublabel: enProceso > 0 ? 'Motor activo' : 'Motor libre', color: enProceso > 0 ? '#FFB020' : '#00E5A0', icon: enProceso > 0 ? 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2' : 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3', value: loading ? null : enProceso, suffix: '', extra: null }
-            ].map((s, i) => (
-              <div key={i} style={{ background: 'rgba(10,14,22,0.9)', border: '1px solid rgba(240,246,252,0.06)', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,.25)', position: 'relative' as const }}>
-                <div style={{ height: '3px', background: s.color }}/>
-                <div style={{ padding: isMobile ? '14px' : '18px 20px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: `${s.color}14`, border: `1px solid ${s.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon}/></svg>
-                    </div>
-                    <span style={{ fontSize: '10px', fontWeight: 700, color: s.color, background: `${s.color}12`, border: `1px solid ${s.color}25`, padding: '3px 8px', borderRadius: '100px', whiteSpace: 'nowrap' as const }}>{s.sublabel}</span>
-                  </div>
-                  <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '28px' : '36px', fontWeight: 900, lineHeight: 1, marginBottom: '4px', color: '#f0f6fc', letterSpacing: '-1px' }}>
-                    {s.value === null ? <span style={{ color: '#334455', fontSize: '20px' }}>—</span> : <AnimatedNumber value={statsVisible ? (s.value as number) : 0} suffix={s.suffix} formatter={(s as any).formatValue}/>}
-                  </div>
-                  <div style={{ fontSize: '11px', color: '#667788', fontWeight: 500 }}>{s.label}</div>
-                  {s.extra}
+            ].map((stat: any, i: number) => (
+              <div key={i} style={{ background: 'var(--s1)', border: '1px solid var(--b)', borderRadius: '14px', padding: isMobile ? '14px' : '18px', opacity: statsVisible ? 1 : 0, transform: statsVisible ? 'translateY(0)' : 'translateY(10px)', transition: `all .5s ease ${i * 0.08}s` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '11px', color: 'var(--t2)', fontWeight: 600 }}>{stat.label}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={stat.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={stat.icon}/></svg>
                 </div>
+                <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '24px' : '30px', fontWeight: 900, color: stat.color, letterSpacing: '-1px', lineHeight: 1 }}>
+                  {stat.value === null ? '—' : <AnimatedNumber value={stat.value} suffix={stat.suffix}/>}
+                </div>
+                <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '4px' }}>{stat.sublabel}</div>
+                {stat.extra}
               </div>
             ))}
           </div>
 
-          <Link href="/upload" style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '20px', background: 'rgba(0,168,232,.03)', border: '1.5px dashed rgba(0,168,232,.2)', borderRadius: '14px', padding: isMobile ? '14px 16px' : '18px 24px', marginBottom: isMobile ? '16px' : '24px', textDecoration: 'none', flexWrap: 'wrap' as const }}>
-            <div style={{ width: isMobile ? '38px' : '46px', height: isMobile ? '38px' : '46px', background: 'linear-gradient(135deg,rgba(0,168,232,.15),rgba(0,168,232,.05))', border: '1px solid rgba(0,168,232,.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width={isMobile ? 17 : 20} height={isMobile ? 17 : 20} viewBox="0 0 24 24" fill="none" stroke="#00A8E8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-            </div>
-            <div style={{ flex: 1 }}>
-              <h3 style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '13px' : '15px', fontWeight: 700, marginBottom: '2px', color: 'var(--t1)' }}>Procesar nuevo video</h3>
-              <p style={{ fontSize: isMobile ? '11px' : '12px', color: 'var(--t2)' }}>Arrastra un archivo o pega un link de Drive / Dropbox</p>
-            </div>
-            <span style={{ background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', color: '#000', padding: isMobile ? '7px 14px' : '9px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, flexShrink: 0 }}>Subir →</span>
-          </Link>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap' as const, gap: '10px' }}>
-            <div>
-              <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '14px' : '16px', fontWeight: 700 }}>Mis videos</div>
-              <div style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '1px' }}>{videos.length} videos · auto-actualiza</div>
-            </div>
-            <div style={{ display: 'flex', gap: '3px', background: 'var(--s1)', border: '1px solid var(--b)', padding: '3px', borderRadius: '9px' }}>
-              {[{ id: 'todos', label: 'Todos' }, { id: 'completados', label: isMobile ? 'OK' : 'Completados' }, { id: 'proceso', label: isMobile ? 'Activos' : 'En proceso' }].map(f => (
-                <button key={f.id} onClick={() => setFiltro(f.id)} style={{ padding: isMobile ? '5px 9px' : '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', transition: 'all .2s', background: filtro === f.id ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'transparent', color: filtro === f.id ? '#000' : 'var(--t2)' }}>{f.label}</button>
-              ))}
-            </div>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' as const }}>
+            {[{ id: 'todos', label: 'Todos' }, { id: 'completados', label: isMobile ? 'OK' : 'Completados' }, { id: 'proceso', label: isMobile ? 'Activos' : 'En proceso' }].map(f => (
+              <button key={f.id} onClick={() => setFiltro(f.id)} style={{ padding: '7px 14px', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: filtro === f.id ? '#00A8E8' : 'rgba(255,255,255,.04)', color: filtro === f.id ? '#000' : 'var(--t2)', border: filtro === f.id ? 'none' : '1px solid var(--b)', transition: 'all .2s' }}>
+                {f.label}
+              </button>
+            ))}
           </div>
-
-          {loading && <div style={{ textAlign: 'center', padding: '48px', color: 'var(--t3)' }}><div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--b)', borderTop: '2px solid #00A8E8', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}/>Cargando tus videos...</div>}
 
           {!loading && filtrados.length === 0 && (
             <div style={{ textAlign: 'center', padding: isMobile ? '36px 20px' : '56px 24px', background: 'var(--s1)', borderRadius: '16px', border: '1px solid var(--b)' }}>
@@ -568,17 +617,16 @@ export default function Dashboard() {
           {filtrados.map((v: any) => {
             const f = v.fields || {}
             const estado = f.Estado || 'Pendiente'
-            const done = estado === 'Completado'
-            const processing = estado === 'Procesando' || estado === 'Pendiente'
-            // v17.4: estado intermedio "En revisión" — Word ya disponible, ZIP pendiente máx 12h
-            const enRevision = estado === 'En revisión' || estado === 'En revision' || f.Estado_Cliente === 'revision_final'
-            const wordAdelantado = f.Word_Adelantado_URL || f.word_adelantado_url || ''
+            const done = isCompletado(estado)
+            const processing = isEnProceso(estado)
+            const enRevision = isEnRevision(estado)
             const durText = formatDuracion(f)
+            const errorDescarga = erroresDescarga[v.id]
             return (
-              <div key={v.id} style={{ background: done ? 'linear-gradient(135deg,rgba(0,229,160,.04),rgba(12,16,24,.8))' : enRevision ? 'linear-gradient(135deg,rgba(160,120,255,.04),rgba(12,16,24,.8))' : processing ? 'linear-gradient(135deg,rgba(255,176,32,.04),rgba(12,16,24,.8))' : 'var(--s1)', border: `1px solid ${done ? 'rgba(0,229,160,.15)' : enRevision ? 'rgba(160,120,255,.18)' : processing ? 'rgba(255,176,32,.15)' : 'var(--b)'}`, borderRadius: '14px', marginBottom: '10px', overflow: 'hidden', transition: 'all .3s' }}>
+              <div key={v.id} style={{ background: done ? 'linear-gradient(135deg,rgba(0,229,160,.04),rgba(12,16,24,.8))' : processing ? 'linear-gradient(135deg,rgba(255,176,32,.04),rgba(12,16,24,.8))' : 'var(--s1)', border: `1px solid ${done ? 'rgba(0,229,160,.15)' : processing ? 'rgba(255,176,32,.15)' : 'var(--b)'}`, borderRadius: '14px', marginBottom: '10px', overflow: 'hidden', transition: 'all .3s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '14px', padding: isMobile ? '12px 14px' : '14px 16px' }}>
-                  <div style={{ width: isMobile ? '36px' : '44px', height: isMobile ? '30px' : '36px', borderRadius: '8px', flexShrink: 0, background: done ? 'rgba(0,229,160,.08)' : enRevision ? 'rgba(160,120,255,.1)' : processing ? 'rgba(255,176,32,.08)' : 'var(--s2)', border: `1px solid ${done ? 'rgba(0,229,160,.2)' : enRevision ? 'rgba(160,120,255,.25)' : processing ? 'rgba(255,176,32,.2)' : 'var(--b)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={done ? 'var(--ok)' : enRevision ? '#A078FF' : processing ? 'var(--warn)' : 'var(--t3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                  <div style={{ width: isMobile ? '36px' : '44px', height: isMobile ? '30px' : '36px', borderRadius: '8px', flexShrink: 0, background: done ? 'rgba(0,229,160,.08)' : processing ? 'rgba(255,176,32,.08)' : 'var(--s2)', border: `1px solid ${done ? 'rgba(0,229,160,.2)' : processing ? 'rgba(255,176,32,.2)' : 'var(--b)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={done ? 'var(--ok)' : processing ? 'var(--warn)' : 'var(--t3)'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: isMobile ? '12px' : '14px', fontWeight: 600, whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '3px' }}>{f.VideoID || 'Sin nombre'}</div>
@@ -589,29 +637,25 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <span style={{ padding: '4px 9px', borderRadius: '100px', fontSize: '10px', fontWeight: 700, background: done ? 'rgba(0,229,160,.1)' : enRevision ? 'rgba(160,120,255,.12)' : processing ? 'rgba(255,176,32,.1)' : 'rgba(255,255,255,.05)', color: done ? 'var(--ok)' : enRevision ? '#A078FF' : processing ? 'var(--warn)' : 'var(--t2)', border: `1px solid ${done ? 'rgba(0,229,160,.25)' : enRevision ? 'rgba(160,120,255,.3)' : processing ? 'rgba(255,176,32,.25)' : 'rgba(255,255,255,.1)'}` }}>{enRevision ? 'En revisión' : estado}</span>
+                    <span style={{ padding: '4px 9px', borderRadius: '100px', fontSize: '10px', fontWeight: 700, background: done ? 'rgba(0,229,160,.1)' : processing ? 'rgba(255,176,32,.1)' : enRevision ? 'rgba(160,120,255,.1)' : 'rgba(255,255,255,.05)', color: done ? 'var(--ok)' : processing ? 'var(--warn)' : enRevision ? '#A078FF' : 'var(--t2)', border: `1px solid ${done ? 'rgba(0,229,160,.25)' : processing ? 'rgba(255,176,32,.25)' : enRevision ? 'rgba(160,120,255,.25)' : 'rgba(255,255,255,.1)'}` }}>{enRevision ? 'Revisión de calidad' : estado}</span>
                     {done && (f.Resultado || f.Zip_Key) && (
                       <button onClick={() => descargarZip(v)} disabled={descargando === v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', border: '1px solid var(--b)', color: 'var(--t2)', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', opacity: descargando === v.id ? 0.5 : 1 }}>
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
                         {descargando === v.id ? '...' : 'ZIP'}
                       </button>
                     )}
-                    {enRevision && wordAdelantado && (
-                      <a href={wordAdelantado} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', border: '1px solid rgba(160,120,255,.3)', color: '#A078FF', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, textDecoration: 'none' }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                        Word
-                      </a>
-                    )}
                   </div>
                 </div>
-                {processing && <AnimatedProgress createdAt={f?.['Created time'] || v.createdTime || v.id}/>}
+                {errorDescarga && (
+                  <div style={{ padding: '0 16px 12px', fontSize: '11px', color: '#e24b4a' }}>
+                    {errorDescarga}
+                  </div>
+                )}
+                {processing && <AnimatedProgress createdAt={f?.['Created time'] || v.createdTime || null}/>}
                 {enRevision && (
                   <div style={{ padding: '0 16px 14px' }}>
-                    <div style={{ background: 'rgba(160,120,255,.05)', border: '1px solid rgba(160,120,255,.15)', borderRadius: '10px', padding: '12px 14px' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 600, color: '#A078FF', marginBottom: '4px' }}>Revisión final de calidad en curso</div>
-                      <div style={{ fontSize: '11px', color: 'var(--t2)', lineHeight: 1.55 }}>
-                        Tu documento Word está listo para descargar. Las cápsulas de video estarán disponibles en máximo 12 horas, tras una revisión manual sin costo adicional.
-                      </div>
+                    <div style={{ background: 'rgba(160,120,255,.05)', border: '1px solid rgba(160,120,255,.15)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
+                      Estamos haciendo una revisión final de calidad. Te avisaremos por correo cuando esté listo. No necesitas hacer nada.
                     </div>
                   </div>
                 )}
@@ -624,7 +668,6 @@ export default function Dashboard() {
                         </span>
                       ))}
                     </div>
-                    {/* FEEDBACK — exactamente debajo de los chips verdes */}
                     <FeedbackPanel record={v} modulos={f.Modulos_detectados || 0} />
                   </>
                 )}
