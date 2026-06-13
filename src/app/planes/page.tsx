@@ -1,88 +1,26 @@
 'use client'
 import Link from 'next/link'
 import { useState, useEffect } from 'react'
+import {
+  PLANS,
+  PLANS_ORDER,
+  DEMO_PLAN,
+  formatHorasMin,
+  getProductId,
+  isPlanComprable,
+  type PlanId
+} from '@/lib/plans'
 
-// ⚠️ IMPORTANTE: reemplazar los product_id con los IDs reales de LemonSqueezy
-// cuando crees los 4 productos en USD.
-// Para obtener el ID: LemonSqueezy → Products → click producto → URL: app.lemonsqueezy.com/products/{ID}
-const PLANES = [
-  {
-    id: 'basico',
-    nombre: 'Básico',
-    precio: 25,
-    creditos: 120,        // 2h × 60min
-    horas: '2 horas',
-    pph: '$12.5/hora',
-    features: [
-      'Cápsulas pedagógicas por concepto',
-      'Bibliografía APA detectada con DOI',
-      'Word con glosario, quiz (5 preg.) e índice',
-      'ZIP listo para LMS',
-      'Comprobante de pago',
-      'Créditos sin vencimiento'
-    ],
-    product_id: 'https://thegisto.lemonsqueezy.com/checkout/buy/393a7d12-24d7-4c3d-9d60-400143b384b3',
-    popular: false,
-    color: 'var(--t2)'
-  },
-  {
-    id: 'estandar',
-    nombre: 'Estándar',
-    precio: 119,
-    creditos: 720,        // 12h × 60min
-    horas: '12 horas',
-    pph: '$9.9/hora',
-    features: [
-      'Todo lo de Básico, más:',
-      'Quiz ampliado (8 preguntas Bloom)',
-      'Reporte de calidad del procesamiento',
-      'Soporte por email',
-      'Un diplomado completo de 10–12h'
-    ],
-    product_id: 'https://thegisto.lemonsqueezy.com/checkout/buy/3368ed41-079d-4a62-8818-e18c4f72d6c6',
-    popular: false,
-    color: 'var(--t2)'
-  },
-  {
-    id: 'premium',
-    nombre: 'Premium',
-    precio: 209,
-    creditos: 1500,       // 25h × 60min
-    horas: '25 horas',
-    pph: '$8.4/hora',
-    features: [
-      'Todo lo de Estándar, más:',
-      'Quiz completo (15 preguntas Bloom)',
-      'Subtítulos SRT por cápsula',
-      'Ficha de aprendizaje por cápsula',
-      'Intro 3s + thumbnails por cápsula',
-      'Plantilla Word a elegir (6 estilos)',
-      '2 cursos completos o programa de 20h'
-    ],
-    product_id: 'https://thegisto.lemonsqueezy.com/checkout/buy/0c0dfc86-589e-43d6-adae-b490947910de',
-    popular: true,
-    color: '#00A8E8'
-  },
-  {
-    id: 'empresarial',
-    nombre: 'Empresarial',
-    precio: 399,
-    creditos: 3600,       // 60h × 60min
-    horas: '60 horas',
-    pph: '$6.7/hora',
-    features: [
-      'Todo lo de Premium, más:',
-      'Quiz Bloom integrador (25 preguntas)',
-      'PPT ejecutiva del módulo',
-      'Resumen de marketing del curso',
-      'Soporte prioritario',
-      'Año académico o programa institucional'
-    ],
-    product_id: 'https://thegisto.lemonsqueezy.com/checkout/buy/f2c215a6-4507-48f6-af6a-2a183d60279d',
-    popular: false,
-    color: '#FFB020'
-  }
-]
+// ─────────────────────────────────────────────────────────────
+// /planes — página de precios
+//
+// Fuente única: lib/plans.ts. NO duplicar precios aquí.
+//
+// TODO Bloque B: mover buildCheckoutUrl() a backend (POST /api/checkout/create)
+//   - Validar usuario autenticado server-side
+//   - Validar product_id contra PLANS (no confiar en frontend)
+//   - Firmar metadata custom para que webhook Lemon confíe en user_id
+// ─────────────────────────────────────────────────────────────
 
 const NAV_ITEMS = [
   { href:'/dashboard', label:'Dashboard', icon:'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z' },
@@ -90,16 +28,6 @@ const NAV_ITEMS = [
   { href:'/perfil',    label:'Mi perfil', icon:'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z' },
   { href:'/planes',    label:'Planes y pagos', icon:'M1 4h22v16H1zM1 10h22', active: true },
 ]
-
-// Función helper para mostrar créditos en formato "Xh Ymin"
-function formatHorasMin(minutos: number): string {
-  if (minutos === 0) return '0 min'
-  const h = Math.floor(minutos / 60)
-  const m = minutos % 60
-  if (h === 0) return `${m} min`
-  if (m === 0) return `${h}h`
-  return `${h}h ${m}min`
-}
 
 export default function Planes() {
   const [user, setUser] = useState<any>(null)
@@ -113,10 +41,17 @@ export default function Planes() {
   }, [])
 
   useEffect(() => {
-    const u = localStorage.getItem('gisto_user')
-    if (u) setUser(JSON.parse(u))
+    // Guard contra localStorage corrupto (no debe romper la página)
+    try {
+      const u = localStorage.getItem('gisto_user')
+      if (u) setUser(JSON.parse(u))
+    } catch {
+      try { localStorage.removeItem('gisto_user') } catch {}
+      setUser(null)
+    }
   }, [])
 
+  // TEMPORAL — mover a backend en Bloque B
   function buildCheckoutUrl(productId: string) {
     const base = `https://thegisto.lemonsqueezy.com/buy/${productId}`
     if (!user) return base
@@ -125,6 +60,41 @@ export default function Planes() {
       'checkout[email]': user.email || '',
     })
     return `${base}?${params.toString()}`
+  }
+
+  /** Devuelve qué estado tiene el botón de un plan dado. */
+  function estadoBoton(planId: PlanId): {
+    label: string
+    href: string | null
+    deshabilitado: boolean
+    motivo: string | null
+  } {
+    if (planId === 'demo') {
+      return { label: 'Activo con tu cuenta', href: null, deshabilitado: true, motivo: null }
+    }
+    if (!isPlanComprable(planId)) {
+      return {
+        label: 'Pagos próximamente',
+        href: null,
+        deshabilitado: true,
+        motivo: 'Estamos finalizando la activación de pagos.'
+      }
+    }
+    if (!user) {
+      return {
+        label: 'Iniciar sesión para comprar',
+        href: `/login?next=/planes&plan=${planId}`,
+        deshabilitado: false,
+        motivo: null
+      }
+    }
+    const productId = getProductId(planId)!
+    return {
+      label: 'Comenzar →',
+      href: buildCheckoutUrl(productId),
+      deshabilitado: false,
+      motivo: null
+    }
   }
 
   const Sidebar = () => (
@@ -173,7 +143,7 @@ export default function Planes() {
           <div style={{ fontFamily:"'Cabinet Grotesk',sans-serif", fontSize:'22px', fontWeight:900, color:'#00A8E8' }}>
             {formatHorasMin(user.creditos||0)}
           </div>
-          <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'2px' }}>Plan: {user.plan||'Demo'}</div>
+          <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'2px' }}>Plan: {user.plan||'demo'}</div>
         </div>
       )}
     </aside>
@@ -229,7 +199,7 @@ export default function Planes() {
                 fontWeight:900, letterSpacing:'-1.5px', marginBottom:'8px'
               }}>Planes y Créditos</h1>
               <p style={{ fontSize: isMobile ? '13px' : '15px', color:'var(--t2)', lineHeight:1.5 }}>
-                Paga por horas de video. Sin suscripción. Los créditos no vencen.
+                Paga por horas de procesamiento. Sin suscripción. Los créditos no vencen.
               </p>
             </div>
 
@@ -240,83 +210,110 @@ export default function Planes() {
               gap: isMobile ? '12px' : '14px',
               marginBottom: isMobile ? '16px' : '20px'
             }}>
-              {PLANES.map(plan => (
-                <div key={plan.id} style={{
-                  background: plan.popular ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)' : '#0C1018',
-                  border: `1px solid ${plan.popular ? '#00A8E8' : 'var(--b)'}`,
-                  borderRadius:'18px',
-                  padding: isMobile ? '20px' : '22px',
-                  position:'relative' as const,
-                  display:'flex', flexDirection:'column' as const
-                }}>
-                  {plan.popular && (
-                    <div style={{
-                      position:'absolute' as const, top:'-11px', left:'50%',
-                      transform:'translateX(-50%)',
-                      background:'#00A8E8', color:'#000',
-                      fontSize:'10px', fontWeight:800, padding:'3px 14px',
-                      borderRadius:'100px', whiteSpace:'nowrap' as const, letterSpacing:'.5px'
-                    }}>MÁS POPULAR</div>
-                  )}
-
-                  <div style={{ marginBottom:'14px' }}>
-                    <div style={{ fontSize:'11px', fontWeight:700, letterSpacing:'2px', textTransform:'uppercase' as const, color:'var(--t2)', marginBottom:'8px' }}>
-                      {plan.nombre}
-                    </div>
-                    <div style={{ display:'flex', alignItems:'baseline', gap:'4px', marginBottom:'4px' }}>
-                      <span style={{ fontFamily:"'Cabinet Grotesk',sans-serif", fontSize:'16px', fontWeight:700, color:'var(--t2)' }}>$</span>
-                      <span style={{ fontFamily:"'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '32px' : '38px', fontWeight:900, letterSpacing:'-1px', lineHeight:1, color:plan.color }}>
-                        {plan.precio}
-                      </span>
-                    </div>
-                    <div style={{ fontSize:'11px', color:'var(--t3)' }}>pago único · sin suscripción</div>
-                  </div>
-
-                  <div style={{
-                    display:'inline-flex', alignItems:'center', gap:'6px',
-                    background:'rgba(0,168,232,.06)', border:'1px solid var(--b)',
-                    borderRadius:'7px', padding:'5px 10px', marginBottom:'6px',
-                    width:'fit-content'
+              {PLANS_ORDER.map(id => {
+                const plan = PLANS[id]
+                const btn = estadoBoton(id)
+                return (
+                  <div key={plan.id} style={{
+                    background: plan.recommended ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)' : '#0C1018',
+                    border: `1px solid ${plan.recommended ? '#00A8E8' : 'var(--b)'}`,
+                    borderRadius:'18px',
+                    padding: isMobile ? '20px' : '22px',
+                    position:'relative' as const,
+                    display:'flex', flexDirection:'column' as const
                   }}>
-                    <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:plan.color }}/>
-                    <span style={{ fontSize:'12px', fontWeight:700, color:'var(--t1)' }}>{plan.horas}</span>
-                  </div>
-                  <div style={{ fontSize:'10px', color:'var(--t3)', fontFamily:'monospace', marginBottom:'16px' }}>
-                    {plan.pph}
-                  </div>
+                    {plan.recommended && (
+                      <div style={{
+                        position:'absolute' as const, top:'-11px', left:'50%',
+                        transform:'translateX(-50%)',
+                        background:'#00A8E8', color:'#000',
+                        fontSize:'10px', fontWeight:800, padding:'3px 14px',
+                        borderRadius:'100px', whiteSpace:'nowrap' as const, letterSpacing:'.5px'
+                      }}>MÁS POPULAR</div>
+                    )}
 
-                  <div style={{ borderTop:'1px solid rgba(240,246,252,.06)', paddingTop:'14px', marginBottom:'16px', flexGrow:1 }}>
-                    {plan.features.map((f, i) => (
-                      <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'8px', fontSize:'12px', color:'var(--t2)', marginBottom:'7px', lineHeight:1.45 }}>
-                        <span style={{
-                          width:'14px', height:'14px', borderRadius:'4px',
-                          background:'rgba(0,229,160,.09)',
-                          border:'1px solid rgba(0,229,160,.2)',
-                          display:'flex', alignItems:'center', justifyContent:'center',
-                          flexShrink:0, marginTop:'1px'
-                        }}>
-                          <svg width="7" height="7" viewBox="0 0 10 8" fill="none" stroke="var(--ok)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="1,4 4,7 9,1"/>
-                          </svg>
-                        </span>
-                        {f}
+                    <div style={{ marginBottom:'14px' }}>
+                      <div style={{ fontSize:'11px', fontWeight:700, letterSpacing:'2px', textTransform:'uppercase' as const, color:'var(--t2)', marginBottom:'8px' }}>
+                        {plan.nombre}
                       </div>
-                    ))}
-                  </div>
+                      <div style={{ display:'flex', alignItems:'baseline', gap:'4px', marginBottom:'4px' }}>
+                        <span style={{ fontFamily:"'Cabinet Grotesk',sans-serif", fontSize:'16px', fontWeight:700, color:'var(--t2)' }}>$</span>
+                        <span style={{ fontFamily:"'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '32px' : '38px', fontWeight:900, letterSpacing:'-1px', lineHeight:1, color:plan.color }}>
+                          {plan.precioUSD}
+                        </span>
+                      </div>
+                      <div style={{ fontSize:'11px', color:'var(--t3)' }}>pago único · sin suscripción</div>
+                      <div style={{ fontSize:'10px', color:'var(--t3)', marginTop:'2px' }}>+ impuestos aplicables en checkout</div>
+                    </div>
 
-                  <a href={buildCheckoutUrl(plan.product_id)} target="_blank" rel="noopener noreferrer"
-                    style={{
-                      display:'block', textAlign:'center', padding:'12px',
-                      borderRadius:'10px', fontWeight:700, fontSize:'13px',
-                      textDecoration:'none', transition:'all .2s',
-                      background: plan.popular ? '#00A8E8' : 'transparent',
-                      color: plan.popular ? '#000' : 'var(--t1)',
-                      border: plan.popular ? 'none' : '1px solid var(--b)'
+                    <div style={{
+                      display:'inline-flex', alignItems:'center', gap:'6px',
+                      background:'rgba(0,168,232,.06)', border:'1px solid var(--b)',
+                      borderRadius:'7px', padding:'5px 10px', marginBottom:'6px',
+                      width:'fit-content'
                     }}>
-                    Comenzar →
-                  </a>
-                </div>
-              ))}
+                      <span style={{ width:'5px', height:'5px', borderRadius:'50%', background:plan.color }}/>
+                      <span style={{ fontSize:'12px', fontWeight:700, color:'var(--t1)' }}>{plan.horasLabel}</span>
+                    </div>
+                    <div style={{ fontSize:'10px', color:'var(--t3)', fontFamily:'monospace', marginBottom:'16px' }}>
+                      {plan.pphLabel}
+                    </div>
+
+                    <div style={{ borderTop:'1px solid rgba(240,246,252,.06)', paddingTop:'14px', marginBottom:'16px', flexGrow:1 }}>
+                      {plan.features.map((f, i) => (
+                        <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'8px', fontSize:'12px', color:'var(--t2)', marginBottom:'7px', lineHeight:1.45 }}>
+                          <span style={{
+                            width:'14px', height:'14px', borderRadius:'4px',
+                            background:'rgba(0,229,160,.09)',
+                            border:'1px solid rgba(0,229,160,.2)',
+                            display:'flex', alignItems:'center', justifyContent:'center',
+                            flexShrink:0, marginTop:'1px'
+                          }}>
+                            <svg width="7" height="7" viewBox="0 0 10 8" fill="none" stroke="var(--ok)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="1,4 4,7 9,1"/>
+                            </svg>
+                          </span>
+                          {f}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Botón: con href solo si hay product_id real y usuario logueado */}
+                    {btn.deshabilitado ? (
+                      <div style={{
+                        display:'block', textAlign:'center', padding:'12px',
+                        borderRadius:'10px', fontWeight:700, fontSize:'13px',
+                        background: 'rgba(255,255,255,.04)',
+                        color: 'var(--t3)',
+                        border: '1px solid var(--b)',
+                        cursor: 'not-allowed'
+                      }}>
+                        {btn.label}
+                      </div>
+                    ) : (
+                      <a
+                        href={btn.href!}
+                        {...(btn.href!.startsWith('http') ? { target:'_blank', rel:'noopener noreferrer' } : {})}
+                        style={{
+                          display:'block', textAlign:'center', padding:'12px',
+                          borderRadius:'10px', fontWeight:700, fontSize:'13px',
+                          textDecoration:'none', transition:'all .2s',
+                          background: plan.recommended ? '#00A8E8' : 'transparent',
+                          color: plan.recommended ? '#000' : 'var(--t1)',
+                          border: plan.recommended ? 'none' : '1px solid var(--b)'
+                        }}>
+                        {btn.label}
+                      </a>
+                    )}
+
+                    {btn.motivo && (
+                      <div style={{ fontSize:'10px', color:'var(--t3)', textAlign:'center', marginTop:'8px', lineHeight:1.4 }}>
+                        {btn.motivo}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
             {/* Plan Demo */}
@@ -331,7 +328,7 @@ export default function Planes() {
                   Plan Demo
                 </div>
                 <div style={{ fontSize:'13px', color:'var(--t2)' }}>
-                  30 minutos gratis incluidos con tu cuenta. Sin tarjeta requerida.
+                  {DEMO_PLAN.minutos} minutos gratis incluidos con tu cuenta. Sin tarjeta requerida.
                 </div>
               </div>
               <div style={{ fontFamily:"'Cabinet Grotesk',sans-serif", fontSize:'28px', fontWeight:900, color:'var(--ok)' }}>
@@ -339,12 +336,20 @@ export default function Planes() {
               </div>
             </div>
 
+            {/* Microcopy de facturación corregido — USD + Lemon + Nubefact */}
             <div style={{
               marginTop:'20px', background:'rgba(0,168,232,.04)',
               border:'1px solid rgba(0,168,232,.12)', borderRadius:'12px',
               padding:'14px 18px', fontSize:'13px', color:'var(--t2)', lineHeight:1.6
             }}>
-              <strong style={{ color:'var(--t1)' }}>Facturación:</strong> Los pagos se procesan de forma segura. Recibirás factura o boleta electrónica según corresponda. Los créditos se acreditan de inmediato tras la confirmación del pago.
+              <strong style={{ color:'var(--t1)' }}>Facturación:</strong> Los precios están en USD y no incluyen impuestos. Lemon Squeezy calcula y cobra los impuestos aplicables según el país del comprador. THE GISTO emite comprobante electrónico en USD por el total pagado, con desglose tributario cuando corresponda. Los créditos se acreditan automáticamente tras la confirmación del pago.
+            </div>
+
+            {/* Microcopy post-pago */}
+            <div style={{
+              marginTop:'10px', fontSize:'11px', color:'var(--t3)', textAlign:'center', lineHeight:1.5
+            }}>
+              Si no ves los créditos reflejados en unos minutos tras pagar, contacta soporte.
             </div>
 
           </div>
