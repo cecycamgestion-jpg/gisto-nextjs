@@ -2,62 +2,34 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  PLANS,
-  PLAN_COLORS,
-  PLAN_BG,
-  PLAN_MAX_MINUTOS,
-  resolverPlan,
-  formatHorasMin,
-  type PlanId
-} from '@/lib/plans'
 
-// ─────────────────────────────────────────────────────────────
-// Dashboard de usuario
-//
-// Fuente única para nombres/colores/máximos de plan: lib/plans.ts.
-// NO redefinir MAX_CREDITOS/PLAN_COLORS aquí — ya estaban con nombres
-// viejos (Free/Starter/Professional/Academia) y rompían la barra cuando
-// el usuario tenía plan 'premium' o 'estandar' (caían a default 40min).
-// ─────────────────────────────────────────────────────────────
-
+const MAX_CREDITOS: any = {
+  'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200,'academia':1200
+}
+const PLAN_COLORS: any = {
+  'Free':'#8899aa','Starter':'#00A8E8',
+  'Professional':'#00E5A0','Profesional':'#00E5A0','Academia':'#FFB020'
+}
+const PLAN_BG: any = {
+  'Free':'rgba(136,153,170,.06)','Starter':'rgba(0,168,232,.08)',
+  'Professional':'rgba(0,229,160,.08)','Profesional':'rgba(0,229,160,.08)','Academia':'rgba(255,176,32,.08)'
+}
 const PROGRESS_MSGS = [
   'Transcribiendo el audio...','Analizando estructura pedagógica...',
   'Limpiando interacciones del aula...','Aplicando corte anatómico...',
   'Generando documentos Word...','Empaquetando tu curso...',
   'Casi listo...','Un momento más...'
 ]
-
 const ERRORES_CORTE = [
   { id: 'corto_despues', label: 'Debió cortar antes (es muy larga)' },
   { id: 'corto_antes',   label: 'Debió cortar después (es muy corta)' },
   { id: 'mezcla_temas',  label: 'Trata más de un tema (debería ser dos cápsulas)' }
 ]
 
-/** Normaliza el campo Estado de Airtable. Maneja mayúsculas, tildes, espacios. */
-function normalizeEstado(raw: unknown): string {
-  if (typeof raw !== 'string') return ''
-  return raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim()
-}
-
-function isCompletado(estado: unknown): boolean {
-  return normalizeEstado(estado) === 'completado'
-}
-
-function isEnProceso(estado: unknown): boolean {
-  const e = normalizeEstado(estado)
-  return e === 'procesando' || e === 'pendiente'
-}
-
-function isEnRevision(estado: unknown): boolean {
-  const e = normalizeEstado(estado)
-  return e === 'en revision' || e === 'revision' || e === 'soporte'
-}
-
 type ValorCorte = 'bien' | 'malo' | null
 interface EstadoCapsula {
   val: ValorCorte
-  errores: string[]
+  errores: string[]   // ahora es array (múltiples checkboxes)
 }
 interface FeedbackVideo { [capId: string]: EstadoCapsula }
 
@@ -68,7 +40,6 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
   const [comentarioGlobal, setComentarioGlobal] = useState('')
   const [enviado, setEnviado] = useState(!!(f.Calidad_Feedback && f.Calidad_Feedback !== ''))
   const [enviando, setEnviando] = useState(false)
-  const [errorEnvio, setErrorEnvio] = useState<string | null>(null)
 
   const capsulas = Array.from({ length: modulos || 0 }, (_, i) => ({ id: `C${i + 1}` }))
 
@@ -95,6 +66,7 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
       return { ...prev, [capId]: { ...prev[capId], errores: nuevos } }
     })
 
+  // Todas respondidas: cada cápsula tiene val !== null, y las "malo" tienen al menos 1 error marcado
   const todoRespondido = capsulas.length > 0 && capsulas.every(c => {
     const s = estado[c.id]
     if (!s || s.val === null) return false
@@ -104,10 +76,10 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
 
   async function enviarFeedback() {
     setEnviando(true)
-    setErrorEnvio(null)
     const buenos = capsulas.filter(c => estado[c.id]?.val === 'bien').length
     const malos  = capsulas.filter(c => estado[c.id]?.val === 'malo')
 
+    // Map id -> label corto para el resumen
     const labelCorto: Record<string,string> = {
       'corto_despues': 'cortar antes',
       'corto_antes':   'cortar después',
@@ -126,24 +98,13 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
     }
 
     try {
-      const r = await fetch('/api/airtable/feedback', {
+      await fetch('/api/airtable/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ record_id: record.id, feedback: resumen })
       })
-      if (!r.ok) {
-        // FIX: NO marcar como enviado si la API falla (Auditoría punto 14)
-        setErrorEnvio('No pudimos guardar tu feedback. Intenta otra vez en unos minutos.')
-        setEnviando(false)
-        return
-      }
-      setEnviado(true)
-      setAbierto(false)
-    } catch {
-      setErrorEnvio('No pudimos guardar tu feedback. Verifica tu conexión e intenta de nuevo.')
-    } finally {
-      setEnviando(false)
-    }
+    } catch {}
+    setEnviado(true); setEnviando(false); setAbierto(false)
   }
 
   if (enviado) return (
@@ -248,6 +209,7 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
             )
           })}
 
+          {/* Campo libre opcional al final */}
           <div style={{ marginTop: '12px' }}>
             <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '5px' }}>¿Algo más que quieras contarnos? (opcional)</p>
             <textarea
@@ -274,12 +236,6 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
             </div>
           </div>
 
-          {errorEnvio && (
-            <div style={{ marginTop: '10px', padding: '8px 10px', background: 'rgba(226,75,75,.06)', border: '1px solid rgba(226,75,75,.2)', borderRadius: '7px', fontSize: '11px', color: '#e24b4a' }}>
-              {errorEnvio}
-            </div>
-          )}
-
           <button onClick={enviarFeedback} disabled={!todoRespondido || enviando} style={{ marginTop: '12px', width: '100%', padding: '9px', background: todoRespondido ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'rgba(0,168,232,.15)', color: todoRespondido ? '#000' : 'rgba(255,255,255,.3)', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: todoRespondido ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
             {enviando ? 'Enviando...' : 'Enviar feedback →'}
           </button>
@@ -287,6 +243,16 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
       )}
     </>
   )
+}
+
+
+function fmtHoras(min: number): string {
+  if (!min || min <= 0) return '0 min'
+  const h = Math.floor(min / 60)
+  const m = Math.round(min % 60)
+  if (h === 0) return `${m} min`
+  if (m === 0) return `${h} h`
+  return `${h} h ${m} min`
 }
 
 function AnimatedNumber({ value, suffix = '' }: { value: number, suffix?: string }) {
@@ -308,16 +274,13 @@ function AnimatedNumber({ value, suffix = '' }: { value: number, suffix?: string
   return <>{display}{suffix}</>
 }
 
-function AnimatedProgress({ createdAt }: { createdAt: string | null | undefined }) {
+function AnimatedProgress({ createdAt }: { createdAt: string }) {
   const [msgIdx, setMsgIdx] = React.useState(0)
   React.useEffect(() => {
-    // FIX: validar fecha — antes se pasaba v.id como fallback y new Date('recXXX') = Invalid Date
-    const parsed = createdAt ? new Date(createdAt).getTime() : NaN
-    const base = Number.isFinite(parsed) ? parsed : Date.now()
-    setMsgIdx(Math.floor((Date.now() - base) / 20000) % PROGRESS_MSGS.length)
     const interval = setInterval(() => {
-      setMsgIdx(prev => (prev + 1) % PROGRESS_MSGS.length)
-    }, 20000)
+      const elapsed = Date.now() - new Date(createdAt).getTime()
+      setMsgIdx(Math.floor(elapsed / 20000) % PROGRESS_MSGS.length)
+    }, 1000)
     return () => clearInterval(interval)
   }, [createdAt])
   return (
@@ -329,9 +292,6 @@ function AnimatedProgress({ createdAt }: { createdAt: string | null | undefined 
         </div>
         <div style={{ height: '3px', background: 'rgba(255,255,255,.06)', borderRadius: '2px', overflow: 'hidden', position: 'relative' as const }}>
           <div style={{ position: 'absolute' as const, height: '100%', width: '40%', background: 'linear-gradient(90deg,transparent,var(--warn),transparent)', borderRadius: '2px', animation: 'indeterminate 1.8s ease-in-out infinite' }}/>
-        </div>
-        <div style={{ marginTop: '8px', fontSize: '10px', color: 'var(--t3)', lineHeight: 1.4 }}>
-          Te avisaremos por correo cuando esté listo.
         </div>
       </div>
     </div>
@@ -345,17 +305,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [creditos, setCreditos] = useState(0)
-  const [planId, setPlanId] = useState<PlanId>('demo')
-  const [creditosMax, setCreditosMax] = useState(PLAN_MAX_MINUTOS.demo)
+  const [creditosMax, setCreditosMax] = useState(40)
   const [avatarUrl, setAvatarUrl] = useState('')
   const [descargando, setDescargando] = useState<string | null>(null)
-  const [erroresDescarga, setErroresDescarga] = useState<Record<string, string>>({})
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [statsVisible, setStatsVisible] = useState(false)
+  const [busqueda, setBusqueda] = useState('')
+  const [etiquetasMap, setEtiquetasMap] = useState<Record<string, { texto: string; color: string }>>({})
+  const COLORES_ETIQUETA = ['#00A8E8','#00E5A0','#A078FF','#FFB020','#E25C5C','#00D4FF']
   const statsRef = useRef<HTMLDivElement>(null)
-  const fetchingRef = useRef(false)
-  const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -372,74 +331,43 @@ export default function Dashboard() {
     return () => obs.disconnect()
   }, [loading])
 
-  // FIX: AbortController + bandera para no acumular requests si la API es lenta (Auditoría punto 18)
   const fetchVideos = useCallback(async () => {
-    if (fetchingRef.current) return
-    fetchingRef.current = true
-    abortRef.current?.abort()
-    const ctrl = new AbortController()
-    abortRef.current = ctrl
     try {
-      const r = await fetch('/api/airtable/videos', { signal: ctrl.signal })
+      const u = localStorage.getItem('gisto_user')
+      const email = u ? (JSON.parse(u).email || '') : ''
+      const r = await fetch('/api/airtable/videos?email=' + encodeURIComponent(email))
       const data = await r.json()
       if (data.records) setVideos(data.records)
-    } catch {
-      // ignorar AbortError silencioso
-    } finally {
       setLoading(false)
-      fetchingRef.current = false
-    }
+    } catch { setLoading(false) }
   }, [])
 
   useEffect(() => {
-    // FIX: try/catch en JSON.parse de localStorage (Auditoría punto 19)
-    let parsed: any = null
-    try {
-      const u = localStorage.getItem('gisto_user')
-      if (!u) { router.push('/login'); return }
-      parsed = JSON.parse(u)
-    } catch {
-      try { localStorage.removeItem('gisto_user') } catch {}
-      router.push('/login')
-      return
-    }
-
-    const planInicial = resolverPlan(parsed.plan)
-    setUser(parsed)
-    setCreditos(parsed.creditos || 0)
-    setPlanId(planInicial)
-    setCreditosMax(PLAN_MAX_MINUTOS[planInicial])
+    const u = localStorage.getItem('gisto_user')
+    if (!u) { router.push('/login'); return }
+    const parsed = JSON.parse(u)
+    setUser(parsed); setCreditos(parsed.creditos || 0)
+    setCreditosMax(MAX_CREDITOS[parsed.plan] || 40)
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
-
-    // FIX: el servidor manda. Eliminamos Math.min(local, airtable) que dejaba
-    // créditos visualmente menores tras una compra (Auditoría puntos 8, 39).
     fetch('/api/airtable/usuario').then(r => r.json()).then(data => {
       if (data.error) return
-      const credAirtable = data.creditos || 0
-      const planAirtable = resolverPlan(data.plan)
-      setCreditos(credAirtable)
-      setPlanId(planAirtable)
-      setCreditosMax(PLAN_MAX_MINUTOS[planAirtable])
+      const credAirtable = data.creditos || 0; const plan = data.plan || 'Free'
+      // FIX: respetar deducciones pendientes — usar el menor valor entre localStorage y Airtable
+      const credLocal = parsed.creditos || 0
+      const cred = Math.min(credLocal, credAirtable)
+      setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan] || 40)
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
-      try {
-        const updated = { ...parsed, creditos: credAirtable, plan: planAirtable, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
-        localStorage.setItem('gisto_user', JSON.stringify(updated))
-        setUser(updated)
-      } catch {}
+      const updated = { ...parsed, creditos: cred, plan, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
+      localStorage.setItem('gisto_user', JSON.stringify(updated)); setUser(updated)
     }).catch(() => {})
-
     fetchVideos()
     const interval = setInterval(fetchVideos, 8000)
-    return () => {
-      clearInterval(interval)
-      abortRef.current?.abort()
-    }
+    return () => clearInterval(interval)
   }, [fetchVideos, router])
 
   async function logout() {
-    try { await fetch('/api/auth/logout', { method: 'POST' }) } catch {}
-    try { localStorage.removeItem('gisto_user') } catch {}
-    router.push('/login')
+    await fetch('/api/auth/logout', { method: 'POST' })
+    localStorage.removeItem('gisto_user'); router.push('/login')
   }
 
   async function descargarZip(record: any) {
@@ -448,21 +376,12 @@ export default function Dashboard() {
     if (!zipKey && f.Resultado) { window.open(f.Resultado, '_blank'); return }
     if (!zipKey) return
     setDescargando(record.id)
-    setErroresDescarga(prev => ({ ...prev, [record.id]: '' }))
     try {
       const r = await fetch('/api/download', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ zip_key: zipKey }) })
       const data = await r.json()
-      if (r.ok && data.download_url) {
-        window.open(data.download_url, '_blank')
-      } else {
-        // FIX: no fallar silenciosamente (Auditoría punto 13)
-        setErroresDescarga(prev => ({ ...prev, [record.id]: 'No pudimos generar el enlace. Intenta de nuevo o contacta soporte.' }))
-      }
-    } catch {
-      setErroresDescarga(prev => ({ ...prev, [record.id]: 'No pudimos generar el enlace. Intenta de nuevo o contacta soporte.' }))
-    } finally {
-      setDescargando(null)
-    }
+      if (data.download_url) window.open(data.download_url, '_blank')
+    } catch {}
+    finally { setDescargando(null) }
   }
 
   function formatDuracion(f: any) {
@@ -482,33 +401,21 @@ export default function Dashboard() {
     return `Hace ${days}d`
   }
 
-  const hayProcesando = videos.some(v => isEnProceso(v.fields?.Estado))
-  const enProceso = videos.filter(v => isEnProceso(v.fields?.Estado)).length
-
-  // FIX: "Videos procesados" solo cuenta los completados (Auditoría punto 10)
-  const completados = videos.filter(v => isCompletado(v.fields?.Estado)).length
-  const modulos = videos
-    .filter(v => isCompletado(v.fields?.Estado))
-    .reduce((a, v) => a + (v.fields?.Modulos_detectados || 0), 0)
-
+  const hayProcesando = videos.some(v => { const e = v.fields?.Estado?.toLowerCase(); return e === 'procesando' || e === 'pendiente' })
+  const enProceso = videos.filter(v => { const e = v.fields?.Estado?.toLowerCase(); return e === 'procesando' || e === 'pendiente' }).length
+  const modulos = videos.reduce((a, v) => a + (v.fields?.Modulos_detectados || 0), 0)
   const filtrados = videos.filter(v => {
-    const e = v.fields?.Estado
-    if (filtro === 'completados') return isCompletado(e)
-    if (filtro === 'proceso') return isEnProceso(e)
-    return true
+    const e = v.fields?.Estado?.toLowerCase() || ''
+    const nombre = (v.fields?.VideoID || '').toLowerCase()
+    const q = busqueda.toLowerCase()
+    const matchBusqueda = !q || nombre.includes(q)
+    const matchFiltro = filtro === 'completados' ? e === 'completado' : filtro === 'proceso' ? (e === 'procesando' || e === 'pendiente') : true
+    return matchBusqueda && matchFiltro
   })
 
-  const planActual = PLANS[planId]
-  const planLabel = planActual.nombre
-  const planColor = PLAN_COLORS[planId]
-  const planBgColor = PLAN_BG[planId]
+  const planActual = user?.plan || 'Free'
   const inicial = user?.nombre?.[0]?.toUpperCase() || 'U'
-
-  // FIX: si créditos = 0 la barra debe ser 0%, no Math.max(2, ...) que dejaba
-  // barra visualmente llena cuando saldo era 0 (Auditoría punto 9)
-  const porcentaje = creditos <= 0 || creditosMax <= 0
-    ? 0
-    : Math.min(100, (creditos / creditosMax) * 100)
+  const porcentaje = creditosMax > 0 ? Math.max(2, Math.min(100, (creditos / creditosMax) * 100)) : 2
 
   const NavItem = ({ href, label, icon, active, badge }: any) => (
     <Link href={href} onClick={() => isMobile && setSidebarOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', color: active ? 'var(--t1)' : 'var(--t2)', textDecoration: 'none', borderRadius: '9px', marginBottom: '2px', fontSize: '14px', fontWeight: 500, background: active ? 'rgba(0,168,232,0.08)' : 'transparent', border: active ? '1px solid var(--b)' : '1px solid transparent', transition: 'all .2s' }}>
@@ -534,15 +441,15 @@ export default function Dashboard() {
         <div style={{ marginTop: 'auto', background: 'rgba(0,168,232,.06)', border: '1px solid var(--b)', borderRadius: '12px', padding: '14px' }}>
           <div style={{ fontSize: '11px', color: 'var(--t2)', marginBottom: '8px' }}>Créditos disponibles</div>
           <div style={{ height: '6px', background: 'rgba(0,168,232,.12)', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px', position: 'relative' as const }}>
-            <div style={{ height: '100%', width: `${porcentaje}%`, background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '3px', transition: 'width .5s ease', boxShadow: porcentaje > 0 ? '0 0 6px rgba(0,168,232,.4)' : 'none' }}/>
+            <div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '3px', transition: 'width .5s ease', boxShadow: '0 0 6px rgba(0,168,232,.4)' }}/>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: '12px' }}>
-            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{creditos} min</strong>
-            <span style={{ color: '#667788' }}>/ {creditosMax} min</span>
+            <strong style={{ color: '#00A8E8', fontSize: '15px' }}>{fmtHoras(creditos)}</strong>
+            <span style={{ color: '#667788' }}>/ {fmtHoras(creditosMax)}</span>
           </div>
           <div style={{ marginTop: '6px' }}>
             <Link href="/planes" style={{ textDecoration: 'none' }}>
-              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: planColor, background: planBgColor, border: `1px solid ${planColor}30` }}>{planLabel}</span>
+              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: PLAN_COLORS[planActual]||'#00A8E8', background: PLAN_BG[planActual]||'rgba(0,168,232,.08)', border: `1px solid ${PLAN_COLORS[planActual]||'#00A8E8'}30` }}>{planActual}</span>
             </Link>
           </div>
         </div>
@@ -552,7 +459,7 @@ export default function Dashboard() {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '13px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{user?.nombre || 'Usuario'}</div>
-            <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{planLabel}</div>
+            <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{planActual}</div>
           </div>
         </Link>
         <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', color: 'var(--err)', background: 'none', border: 'none', borderRadius: '9px', marginTop: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', width: '100%' }}>
@@ -573,39 +480,69 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          {isMobile && <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}><span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{creditos} min</span><div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/></div></Link>}
+          {isMobile && <Link href="/planes" style={{ display: 'flex', flexDirection: 'column' as const, alignItems: 'flex-end', textDecoration: 'none', gap: '3px' }}><span style={{ fontSize: '13px', fontWeight: 800, color: '#00A8E8' }}>{fmtHoras(creditos)}</span><div style={{ width: '60px', height: '3px', background: 'rgba(0,168,232,.15)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '3px', background: 'linear-gradient(90deg,#00A8E8,#00D4FF)', borderRadius: '2px' }}/></div></Link>}
           {!isMobile && <Link href="/upload" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', color: '#000', padding: '9px 18px', borderRadius: '9px', fontWeight: 800, fontSize: '13px', textDecoration: 'none', boxShadow: '0 4px 14px rgba(0,168,232,.3)' }}><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Nuevo video</Link>}
         </div>
 
         <div style={{ padding: isMobile ? '14px' : '24px 28px', flex: 1 }}>
           <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: isMobile ? '14px' : '24px' }}>
             {[
-              { label: 'Créditos disponibles', sublabel: planLabel, color: planColor, icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: ' min', extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, background: planColor, borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: planColor }}>{creditos} min</span><span>{creditosMax} min</span></div></div>) },
-              { label: 'Videos procesados', sublabel: 'Completados', color: '#00E5A0', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: loading ? null : completados, suffix: '', extra: null },
-              { label: 'Módulos generados', sublabel: 'En tus cursos completados', color: '#A078FF', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: loading ? null : modulos, suffix: '', extra: null },
+              { label: 'Créditos disponibles', sublabel: planActual, color: PLAN_COLORS[planActual]||'#00A8E8', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: '', extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: PLAN_COLORS[planActual]||'#00A8E8', borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: PLAN_COLORS[planActual]||'#00A8E8' }}>{creditos} min</span><span>{creditosMax} min</span></div></div>) },
+              { label: 'Videos procesados', sublabel: 'Total acumulado', color: '#00E5A0', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: loading ? null : videos.length, suffix: '', extra: null },
+              { label: 'Módulos generados', sublabel: 'En todos tus videos', color: '#A078FF', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: loading ? null : modulos, suffix: '', extra: null },
               { label: enProceso > 0 ? 'Videos en proceso' : 'Cola de proceso', sublabel: enProceso > 0 ? 'Motor activo' : 'Motor libre', color: enProceso > 0 ? '#FFB020' : '#00E5A0', icon: enProceso > 0 ? 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2' : 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3', value: loading ? null : enProceso, suffix: '', extra: null }
-            ].map((stat: any, i: number) => (
-              <div key={i} style={{ background: 'var(--s1)', border: '1px solid var(--b)', borderRadius: '14px', padding: isMobile ? '14px' : '18px', opacity: statsVisible ? 1 : 0, transform: statsVisible ? 'translateY(0)' : 'translateY(10px)', transition: `all .5s ease ${i * 0.08}s` }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                  <span style={{ fontSize: '11px', color: 'var(--t2)', fontWeight: 600 }}>{stat.label}</span>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={stat.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={stat.icon}/></svg>
+            ].map((s, i) => (
+              <div key={i} style={{ background: 'rgba(10,14,22,0.9)', border: '1px solid rgba(240,246,252,0.06)', borderRadius: '14px', overflow: 'hidden', boxShadow: '0 4px 24px rgba(0,0,0,.25)', position: 'relative' as const }}>
+                <div style={{ height: '3px', background: s.color }}/>
+                <div style={{ padding: isMobile ? '14px' : '18px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: `${s.color}14`, border: `1px solid ${s.color}25`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={s.color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={s.icon}/></svg>
+                    </div>
+                    <span style={{ fontSize: '10px', fontWeight: 700, color: s.color, background: `${s.color}12`, border: `1px solid ${s.color}25`, padding: '3px 8px', borderRadius: '100px', whiteSpace: 'nowrap' as const }}>{s.sublabel}</span>
+                  </div>
+                  <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '28px' : '36px', fontWeight: 900, lineHeight: 1, marginBottom: '4px', color: '#f0f6fc', letterSpacing: '-1px' }}>
+                    {s.value === null ? <span style={{ color: '#334455', fontSize: '20px' }}>—</span> : (s.label === 'Créditos disponibles' ? <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:isMobile?'22px':'28px',fontWeight:900,letterSpacing:'-1px'}}>{fmtHoras(statsVisible ? s.value as number : 0)}</span> : <AnimatedNumber value={statsVisible ? (s.value as number) : 0} suffix={s.suffix}/>)}
+                  </div>
+                  <div style={{ fontSize: '11px', color: '#667788', fontWeight: 500 }}>{s.label}</div>
+                  {s.extra}
                 </div>
-                <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '24px' : '30px', fontWeight: 900, color: stat.color, letterSpacing: '-1px', lineHeight: 1 }}>
-                  {stat.value === null ? '—' : <AnimatedNumber value={stat.value} suffix={stat.suffix}/>}
-                </div>
-                <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '4px' }}>{stat.sublabel}</div>
-                {stat.extra}
               </div>
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' as const }}>
-            {[{ id: 'todos', label: 'Todos' }, { id: 'completados', label: isMobile ? 'OK' : 'Completados' }, { id: 'proceso', label: isMobile ? 'Activos' : 'En proceso' }].map(f => (
-              <button key={f.id} onClick={() => setFiltro(f.id)} style={{ padding: '7px 14px', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', background: filtro === f.id ? '#00A8E8' : 'rgba(255,255,255,.04)', color: filtro === f.id ? '#000' : 'var(--t2)', border: filtro === f.id ? 'none' : '1px solid var(--b)', transition: 'all .2s' }}>
-                {f.label}
-              </button>
-            ))}
+          <Link href="/upload" style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '12px' : '20px', background: 'rgba(0,168,232,.03)', border: '1.5px dashed rgba(0,168,232,.2)', borderRadius: '14px', padding: isMobile ? '14px 16px' : '18px 24px', marginBottom: isMobile ? '16px' : '24px', textDecoration: 'none', flexWrap: 'wrap' as const }}>
+            <div style={{ width: isMobile ? '38px' : '46px', height: isMobile ? '38px' : '46px', background: 'linear-gradient(135deg,rgba(0,168,232,.15),rgba(0,168,232,.05))', border: '1px solid rgba(0,168,232,.2)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width={isMobile ? 17 : 20} height={isMobile ? 17 : 20} viewBox="0 0 24 24" fill="none" stroke="#00A8E8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            </div>
+            <div style={{ flex: 1 }}>
+              <h3 style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '13px' : '15px', fontWeight: 700, marginBottom: '2px', color: 'var(--t1)' }}>Procesar nuevo video</h3>
+              <p style={{ fontSize: isMobile ? '11px' : '12px', color: 'var(--t2)' }}>Arrastra un archivo o pega un link de Drive / Dropbox</p>
+            </div>
+            <span style={{ background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', color: '#000', padding: isMobile ? '7px 14px' : '9px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700, flexShrink: 0 }}>Subir →</span>
+          </Link>
+
+          <div style={{ marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' as const, gap: '10px', marginBottom: '10px' }}>
+              <div>
+                <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '14px' : '16px', fontWeight: 700 }}>Mis videos</div>
+                <div style={{ fontSize: '11px', color: 'var(--t3)', marginTop: '1px' }}>{filtrados.length}{filtrados.length !== videos.length ? ` de ${videos.length}` : ''} videos · auto-actualiza</div>
+              </div>
+              <div style={{ display: 'flex', gap: '3px', background: 'var(--s1)', border: '1px solid var(--b)', padding: '3px', borderRadius: '9px' }}>
+                {[{ id: 'todos', label: 'Todos' }, { id: 'completados', label: isMobile ? 'OK' : 'Completados' }, { id: 'proceso', label: isMobile ? 'Activos' : 'En proceso' }].map(f => (
+                  <button key={f.id} onClick={() => setFiltro(f.id)} style={{ padding: isMobile ? '5px 9px' : '5px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', border: 'none', transition: 'all .2s', background: filtro === f.id ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'transparent', color: filtro === f.id ? '#000' : 'var(--t2)' }}>{f.label}</button>
+                ))}
+              </div>
+            </div>
+            {/* BUSCADOR */}
+            <div style={{ position: 'relative' as const }}>
+              <svg style={{ position: 'absolute' as const, left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre..." style={{ width: '100%', background: 'var(--s1)', border: '1px solid var(--b)', borderRadius: '9px', padding: '9px 12px 9px 34px', color: 'var(--t1)', fontSize: '13px', fontFamily: 'inherit', outline: 'none' }} />
+              {busqueda && <button onClick={() => setBusqueda('')} style={{ position: 'absolute' as const, right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--t3)', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>×</button>}
+            </div>
           </div>
+
+          {loading && <div style={{ textAlign: 'center', padding: '48px', color: 'var(--t3)' }}><div style={{ width: '32px', height: '32px', borderRadius: '50%', border: '2px solid var(--b)', borderTop: '2px solid #00A8E8', animation: 'spin 1s linear infinite', margin: '0 auto 12px' }}/>Cargando tus videos...</div>}
 
           {!loading && filtrados.length === 0 && (
             <div style={{ textAlign: 'center', padding: isMobile ? '36px 20px' : '56px 24px', background: 'var(--s1)', borderRadius: '16px', border: '1px solid var(--b)' }}>
@@ -614,14 +551,24 @@ export default function Dashboard() {
             </div>
           )}
 
-          {filtrados.map((v: any) => {
+        
+  // Mapeador de estados técnicos a texto humano
+  function estadoHumano(e: string): { label: string; color: string; bg: string; border: string; dot?: boolean } {
+    const lower = e?.toLowerCase() || ''
+    if (lower === 'completado') return { label: 'Listo para descargar', color: '#00E5A0', bg: 'rgba(0,229,160,.1)', border: 'rgba(0,229,160,.25)' }
+    if (lower === 'procesando') return { label: 'Procesando', color: '#FFB020', bg: 'rgba(255,176,32,.1)', border: 'rgba(255,176,32,.25)', dot: true }
+    if (lower === 'pendiente')  return { label: 'Recibido', color: '#00A8E8', bg: 'rgba(0,168,232,.1)', border: 'rgba(0,168,232,.25)', dot: true }
+    if (lower === 'en_revision' || lower === 'en revisión') return { label: 'En revisión', color: '#A078FF', bg: 'rgba(160,120,255,.1)', border: 'rgba(160,120,255,.25)', dot: true }
+    if (lower.includes('error')) return { label: 'Error — contacta soporte', color: '#E25C5C', bg: 'rgba(226,92,92,.1)', border: 'rgba(226,92,92,.25)' }
+    return { label: e, color: '#667788', bg: 'rgba(255,255,255,.05)', border: 'rgba(255,255,255,.1)' }
+  }
+
+  {filtrados.map((v: any) => {
             const f = v.fields || {}
             const estado = f.Estado || 'Pendiente'
-            const done = isCompletado(estado)
-            const processing = isEnProceso(estado)
-            const enRevision = isEnRevision(estado)
+            const done = estado === 'Completado'
+            const processing = estado === 'Procesando' || estado === 'Pendiente'
             const durText = formatDuracion(f)
-            const errorDescarga = erroresDescarga[v.id]
             return (
               <div key={v.id} style={{ background: done ? 'linear-gradient(135deg,rgba(0,229,160,.04),rgba(12,16,24,.8))' : processing ? 'linear-gradient(135deg,rgba(255,176,32,.04),rgba(12,16,24,.8))' : 'var(--s1)', border: `1px solid ${done ? 'rgba(0,229,160,.15)' : processing ? 'rgba(255,176,32,.15)' : 'var(--b)'}`, borderRadius: '14px', marginBottom: '10px', overflow: 'hidden', transition: 'all .3s' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: isMobile ? '10px' : '14px', padding: isMobile ? '12px 14px' : '14px 16px' }}>
@@ -637,28 +584,16 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-                    <span style={{ padding: '4px 9px', borderRadius: '100px', fontSize: '10px', fontWeight: 700, background: done ? 'rgba(0,229,160,.1)' : processing ? 'rgba(255,176,32,.1)' : enRevision ? 'rgba(160,120,255,.1)' : 'rgba(255,255,255,.05)', color: done ? 'var(--ok)' : processing ? 'var(--warn)' : enRevision ? '#A078FF' : 'var(--t2)', border: `1px solid ${done ? 'rgba(0,229,160,.25)' : processing ? 'rgba(255,176,32,.25)' : enRevision ? 'rgba(160,120,255,.25)' : 'rgba(255,255,255,.1)'}` }}>{enRevision ? 'Revisión de calidad' : estado}</span>
+                    {(() => { const es = estadoHumano(estado); return (<span style={{ padding: '4px 9px', borderRadius: '100px', fontSize: '10px', fontWeight: 700, background: es.bg, color: es.color, border: `1px solid ${es.border}`, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>{es.dot && <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: es.color, animation: 'pulse 1.5s infinite', display: 'inline-block' }}/>}{es.label}</span>) })()}
                     {done && (f.Resultado || f.Zip_Key) && (
-                      <button onClick={() => descargarZip(v)} disabled={descargando === v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: 'transparent', border: '1px solid var(--b)', color: 'var(--t2)', padding: '6px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', opacity: descargando === v.id ? 0.5 : 1 }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                        {descargando === v.id ? '...' : 'ZIP'}
+                      <button onClick={() => descargarZip(v)} disabled={descargando === v.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'linear-gradient(135deg,rgba(0,229,160,.15),rgba(0,229,160,.05))', border: '1px solid rgba(0,229,160,.3)', color: '#00E5A0', padding: '7px 14px', borderRadius: '9px', fontSize: '12px', fontWeight: 700, cursor: descargando === v.id ? 'not-allowed' : 'pointer', opacity: descargando === v.id ? 0.5 : 1 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                        {descargando === v.id ? 'Descargando...' : 'Descargar archivos'}
                       </button>
                     )}
                   </div>
                 </div>
-                {errorDescarga && (
-                  <div style={{ padding: '0 16px 12px', fontSize: '11px', color: '#e24b4a' }}>
-                    {errorDescarga}
-                  </div>
-                )}
-                {processing && <AnimatedProgress createdAt={f?.['Created time'] || v.createdTime || null}/>}
-                {enRevision && (
-                  <div style={{ padding: '0 16px 14px' }}>
-                    <div style={{ background: 'rgba(160,120,255,.05)', border: '1px solid rgba(160,120,255,.15)', borderRadius: '10px', padding: '12px 14px', fontSize: '12px', color: 'var(--t2)', lineHeight: 1.5 }}>
-                      Estamos haciendo una revisión final de calidad. Te avisaremos por correo cuando esté listo. No necesitas hacer nada.
-                    </div>
-                  </div>
-                )}
+                {processing && <AnimatedProgress createdAt={f?.['Created time'] || v.createdTime || v.id}/>}
                 {done && (
                   <>
                     <div style={{ padding: '0 14px 12px', display: 'flex', gap: '5px', flexWrap: 'wrap' as const }}>
@@ -668,6 +603,33 @@ export default function Dashboard() {
                         </span>
                       ))}
                     </div>
+                    {/* ETIQUETA DE COLOR (usuario asigna) */}
+                    {(() => {
+                      const tag = etiquetasMap[v.id]
+                      return (
+                        <div style={{ padding: '0 14px 8px', display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' as const }}>
+                          {tag ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 600, background: `${tag.color}18`, border: `1px solid ${tag.color}40`, color: tag.color }}>
+                              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: tag.color, flexShrink: 0 }}/>
+                              {tag.texto}
+                              <button onClick={() => setEtiquetasMap(prev => { const n = {...prev}; delete n[v.id]; return n })} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', opacity: .6, fontSize: '13px', lineHeight: 1, padding: '0 0 0 2px' }}>×</button>
+                            </span>
+                          ) : (
+                            <button onClick={() => {
+                              const txt = prompt('Nombre de la etiqueta (ej: Flujo, Tesorería):')
+                              if (!txt) return
+                              const colors = ['#00A8E8','#00E5A0','#A078FF','#FFB020','#E25C5C','#00D4FF']
+                              const color = colors[Object.keys(etiquetasMap).length % colors.length]
+                              setEtiquetasMap(prev => ({ ...prev, [v.id]: { texto: txt, color } }))
+                            }} style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '100px', fontSize: '11px', fontWeight: 500, background: 'rgba(255,255,255,.04)', border: '1px dashed rgba(255,255,255,.12)', color: 'var(--t3)', cursor: 'pointer' }}>
+                              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                              Etiqueta
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })()}
+                {/* FEEDBACK — exactamente debajo de los chips verdes */}
                     <FeedbackPanel record={v} modulos={f.Modulos_detectados || 0} />
                   </>
                 )}
