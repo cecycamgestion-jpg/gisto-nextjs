@@ -2,14 +2,12 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { resolverPlan, getPlan, PLAN_MAX_MINUTOS as MAX_CREDITOS } from '@/lib/plans'
 
 const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL
 const AIRTABLE_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
 const AIRTABLE_BASE = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
-const MAX_CREDITOS: any = {
-  'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200
-}
 const PASOS = [
   { titulo:'Sube tu grabación', desc:'MP4, MOV, AVI o link de Drive/Dropbox', icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12' },
   { titulo:'GISTO analiza', desc:'Transcripción + estructura pedagógica automática', icon:'M22 12h-4l-3 9L9 3l-3 9H2' },
@@ -33,6 +31,18 @@ function getMimeType(file: File): string {
   return map[ext||''] || 'video/mp4'
 }
 
+function getDuracionVideoLocal(file: File): Promise<number> {
+  return new Promise(resolve => {
+    try {
+      const v = document.createElement('video')
+      v.preload = 'metadata'
+      v.onloadedmetadata = () => { const min = (v.duration || 0) / 60; URL.revokeObjectURL(v.src); resolve(min) }
+      v.onerror = () => resolve(0) // algunos formatos no reportan duración → 0 = dejar pasar, valida el server
+      v.src = URL.createObjectURL(file)
+    } catch { resolve(0) }
+  })
+}
+
 export default function Upload() {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -47,14 +57,11 @@ export default function Upload() {
   const xhrRef = useRef<XMLHttpRequest | null>(null)
   const [tipoContenido, setTipoContenido] = useState<string[]>([])
 
-// Helper para toggle de cada opción
-const toggleTipo = (valor: string) => {
-  setTipoContenido(prev =>
-    prev.includes(valor)
-      ? prev.filter(t => t !== valor)
-      : [...prev, valor]
-  )
-}
+  const toggleTipo = (valor: string) => {
+    setTipoContenido(prev =>
+      prev.includes(valor) ? prev.filter(t => t !== valor) : [...prev, valor]
+    )
+  }
   const [mantenerInteracciones, setMantenerInteracciones] = useState(false)
   const [permitirCapsulasLargas, setPermitirCapsulasLargas] = useState(false)
   const [btnHover, setBtnHover] = useState(false)
@@ -76,12 +83,12 @@ const toggleTipo = (valor: string) => {
     const u = localStorage.getItem('gisto_user')
     if (!u) { router.push('/login'); return }
     const parsed = JSON.parse(u)
-    setUser(parsed); setCreditos(parsed.creditos||0); setCreditosMax(MAX_CREDITOS[parsed.plan]||40)
+    setUser(parsed); setCreditos(parsed.creditos||0); setCreditosMax(MAX_CREDITOS[resolverPlan(parsed.plan)])
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
     fetch('/api/airtable/usuario').then(r=>r.json()).then(data=>{
       if (data.error) return
       const cred=data.creditos||0; const plan=data.plan||'Free'
-      setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan]||40)
+      setCreditos(cred); setCreditosMax(MAX_CREDITOS[resolverPlan(plan)])
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
       const updated={...parsed,creditos:cred,plan,nombre:data.nombre,avatarUrl:data.avatar_url||''}
       localStorage.setItem('gisto_user',JSON.stringify(updated)); setUser(updated)
@@ -118,27 +125,26 @@ const toggleTipo = (valor: string) => {
   }
 
   function cancelarSubida() {
-    if (xhrRef.current) {
-      xhrRef.current.abort()
-      xhrRef.current = null
-    }
-    setStep('form')
-    setProgreso(0)
-    setError('')
-    // Nota: los créditos NO se descuentan si se cancela antes del 100% (pendiente verificar con prueba real)
+    if (xhrRef.current) { xhrRef.current.abort(); xhrRef.current = null }
+    setStep('form'); setProgreso(0); setError('')
   }
 
   async function handleProcesar() {
     setError('')
     if (tipoContenido.length === 0) {
-  setError('Selecciona al menos un tipo de contenido del video')
-  return
-}
+      setError('Selecciona al menos un tipo de contenido del video')
+      return
+    }
     if (tab === 'link') {
       if (!url.startsWith('http')) { setError('Ingresa un link válido de Drive o Dropbox'); return }
       setStep('uploading'); await guardarYProcesar(url)
     } else {
       if (!archivo) { setError('Selecciona un archivo de video'); return }
+      const durLocal = await getDuracionVideoLocal(archivo)
+      if (durLocal > 180) {
+        setError(`Tu video dura ${Math.round(durLocal)} min. El máximo por video es 3 horas (180 min). Divídelo en partes más cortas y súbelas por separado.`)
+        return
+      }
       setStep('uploading')
       try { const pubUrl = await subirS3(archivo); await guardarYProcesar(pubUrl) }
       catch (e: any) { setError(e.message); setStep('error') }
@@ -161,6 +167,11 @@ const toggleTipo = (valor: string) => {
         if (ar.ok) { const a = await ar.json(); duracionMin = a.duracion_minutos || 0 }
       } catch {}
 
+      if (duracionMin > 180) {
+        setError(`Tu video dura ${Math.round(duracionMin)} min. El máximo por video es 3 horas (180 min). Divídelo en partes más cortas y súbelas por separado.`)
+        setStep('error'); return
+      }
+
       if (duracionMin > 0 && cred < duracionMin) {
         setError(`Tu video dura ${Math.round(duracionMin)} min pero solo tienes ${cred} min de crédito.`)
         setStep('error'); return
@@ -170,24 +181,23 @@ const toggleTipo = (valor: string) => {
         method:'POST',
         headers:{'Authorization':`Bearer ${AIRTABLE_KEY}`,'Content-Type':'application/json'},
         body: JSON.stringify({fields:{
-  URL: vUrl, VideoID: nombre||`Video-${Date.now()}`,
-  Estado: 'Pendiente',
-  Usuario_Email: userData.email||'',
-  Tipo_Contenido: tipoContenido,
-  Mantener_Interacciones: mantenerInteracciones,
-  Permitir_Capsulas_Largas: permitirCapsulasLargas
-}})
+          URL: vUrl, VideoID: nombre||`Video-${Date.now()}`,
+          Estado: 'Pendiente',
+          Usuario_Email: userData.email||'',
+          Tipo_Contenido: tipoContenido,
+          Mantener_Interacciones: mantenerInteracciones,
+          Permitir_Capsulas_Largas: permitirCapsulasLargas
+        }})
       })
       if (!r.ok) throw new Error('Error registrando video')
 
-     // Descontar créditos siempre, con o sin duración exacta
-const minutosADescontar = duracionMin > 0
-  ? Math.ceil(duracionMin)
-  : Math.ceil((archivo?.size || 0) / (150 * 1024 * 1024) * 60) || 30
-const nuevosCreditos = Math.max(0, cred - minutosADescontar)
-setCreditos(nuevosCreditos)
-const updatedUser = { ...userData, creditos: nuevosCreditos }
-localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
+      const minutosADescontar = duracionMin > 0
+        ? Math.ceil(duracionMin)
+        : Math.ceil((archivo?.size || 0) / (150 * 1024 * 1024) * 60) || 30
+      const nuevosCreditos = Math.max(0, cred - minutosADescontar)
+      setCreditos(nuevosCreditos)
+      const updatedUser = { ...userData, creditos: nuevosCreditos }
+      localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
 
       setStep('queued')
     } catch (e: any) { setError(e.message); setStep('error') }
@@ -200,17 +210,15 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
 
   function fmtHoras(min: number): string {
     if (!min || min <= 0) return '0 min'
-    const h = Math.floor(min / 60)
-    const m = Math.round(min % 60)
+    const h = Math.floor(min / 60); const m = Math.round(min % 60)
     if (h === 0) return `${m} min`
     if (m === 0) return `${h} h`
     return `${h} h ${m} min`
   }
   const inicial = user?.nombre?.[0]?.toUpperCase()||'U'
   const porcentaje = creditosMax>0 ? Math.max(2, Math.min(100,(creditos/creditosMax)*100)) : 2
-  const planActual = user?.plan||'Free'
+  const planActual = getPlan(user?.plan).nombre
 
-  // FIX fondo blanco inputs: background oscuro + color-scheme dark
   const inputStyle: React.CSSProperties = {
     width:'100%', background:'rgba(12,16,24,0.8)',
     border:'1px solid rgba(240,246,252,0.12)',
@@ -269,7 +277,6 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
         <div onClick={()=>setSidebarOpen(false)} style={{position:'fixed' as const,inset:0,background:'rgba(0,0,0,.6)',zIndex:99}}/>
       )}
 
-      {/* SIDEBAR */}
       <aside style={{
         width:'240px',background:'var(--s1)',borderRight:'1px solid var(--b)',padding:'20px 16px',
         display:'flex',flexDirection:'column' as const,flexShrink:0,
@@ -287,10 +294,9 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
         </Link>
         <NavItem href="/dashboard" label="Dashboard" icon="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" active={false}/>
         <NavItem href="/upload" label="Subir video" icon="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" active={true}/>
-        <NavItem href="/perfil" label="Mi perfil" icon="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" active={false}/>
+        <NavItem href="/perfil" label="Mi perfil" icon="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" active={false}/>
         <NavItem href="/planes" label="Planes y pagos" icon="M1 4h22v16H1zM1 10h22" active={false}/>
 
-        {/* Entregables — solo desktop */}
         {!isMobile && (
           <div style={{marginTop:'auto'}}>
             <div style={{fontSize:'10px',fontWeight:700,letterSpacing:'2px',textTransform:'uppercase' as const,color:'var(--t3)',marginBottom:'8px',paddingLeft:'2px'}}>Lo que recibirás</div>
@@ -307,7 +313,6 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
           </div>
         )}
 
-        {/* Usuario */}
         <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'12px 0 0',borderTop:'1px solid var(--b)',marginTop:'10px'}}>
           <div style={{width:'28px',height:'28px',borderRadius:'50%',overflow:'hidden',flexShrink:0,border:'2px solid var(--b)'}}>
             {avatarUrl
@@ -328,24 +333,15 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
         </button>
       </aside>
 
-      {/* MAIN */}
       <main style={{flex:1,overflow:'auto',display:'flex',background:'radial-gradient(ellipse 60% 50% at 50% 30%,rgba(0,168,232,.05) 0%,transparent 60%)'}}>
-
-        {/* FIX MOBILE: topbar compacto con créditos visible */}
         {isMobile && (
-          <div style={{
-            position:'fixed' as const,top:0,left:0,right:0,zIndex:50,
-            display:'flex',alignItems:'center',justifyContent:'space-between',
-            padding:'10px 16px',background:'rgba(6,8,16,.95)',
-            backdropFilter:'blur(12px)',borderBottom:'1px solid var(--b)'
-          }}>
+          <div style={{position:'fixed' as const,top:0,left:0,right:0,zIndex:50,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 16px',background:'rgba(6,8,16,.95)',backdropFilter:'blur(12px)',borderBottom:'1px solid var(--b)'}}>
             <button onClick={()=>setSidebarOpen(v=>!v)} style={{background:'rgba(255,255,255,.06)',border:'1px solid var(--b)',borderRadius:'8px',color:'var(--t1)',padding:'7px',cursor:'pointer',display:'flex',alignItems:'center'}}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
               </svg>
             </button>
             <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontWeight:800,fontSize:'14px'}}>Subir video</span>
-            {/* Créditos visibles en topbar móvil */}
             <Link href="/planes" style={{display:'flex',flexDirection:'column' as const,alignItems:'flex-end',gap:'3px',textDecoration:'none'}}>
               <span style={{fontSize:'12px',fontWeight:800,color:'var(--c)'}}>{fmtHoras(creditos)}</span>
               <div style={{width:'48px',height:'3px',background:'rgba(0,168,232,.15)',borderRadius:'2px',overflow:'hidden'}}>
@@ -355,15 +351,7 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
           </div>
         )}
 
-        {/* Contenido — FIX MOBILE: padding reducido, header oculto en mobile */}
-        <div style={{
-          flex:1,display:'flex',flexDirection:'column' as const,
-          alignItems:'center',justifyContent:'center',
-          // FIX: en mobile padding mínimo para que el botón quede visible
-          padding: isMobile ? '58px 14px 14px' : '32px 24px',
-          minWidth:0,width:'100%'
-        }}>
-          {/* Header solo en desktop */}
+        <div style={{flex:1,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',padding: isMobile ? '58px 14px 14px' : '32px 24px',minWidth:0,width:'100%'}}>
           {!isMobile && (
             <div style={{textAlign:'center',marginBottom:'20px',width:'100%',maxWidth:'520px'}}>
               <div style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'rgba(0,168,232,.08)',border:'1px solid var(--b)',padding:'4px 12px',borderRadius:'100px',fontSize:'10px',fontWeight:600,color:'var(--c)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'14px'}}>
@@ -378,17 +366,10 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
             </div>
           )}
 
-          {/* Card formulario — FIX: padding reducido en mobile */}
-          <div style={{
-            width:'100%',maxWidth:'520px',
-            background:'var(--s1)',border:'1px solid var(--b)',
-            borderRadius:'16px',overflow:'hidden',
-            boxShadow:'0 16px 40px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)'
-          }}>
+          <div style={{width:'100%',maxWidth:'520px',background:'var(--s1)',border:'1px solid var(--b)',borderRadius:'16px',overflow:'hidden',boxShadow:'0 16px 40px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.04)'}}>
             <div style={{height:'2px',background:'linear-gradient(90deg,transparent,var(--c),var(--c2),transparent)'}}/>
             <div style={{padding: isMobile ? '14px' : '24px'}}>
 
-              {/* Uploading */}
               {step === 'uploading' && (
                 <div style={{textAlign:'center',padding:'24px 0'}}>
                   <div style={{width:'48px',height:'48px',borderRadius:'50%',border:'2px solid var(--b)',borderTop:'2px solid var(--c)',margin:'0 auto 16px',animation:'spin 1s linear infinite'}}/>
@@ -406,19 +387,12 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
               )}
 
               {(step === 'form' || step === 'error') && (<>
-                {/* Tabs — FIX: labels cortos en mobile */}
                 <div style={{display:'flex',gap:'3px',background:'rgba(255,255,255,0.04)',padding:'3px',borderRadius:'10px',marginBottom: isMobile ? '12px' : '20px',border:'1px solid rgba(240,246,252,0.08)'}}>
                   {[
                     {id:'link', label: isMobile ? 'Drive / Dropbox' : 'Link de Drive / Dropbox', icon:'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'},
                     {id:'file', label: isMobile ? 'Subir archivo' : 'Subir desde tu PC', icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12'}
                   ].map(t=>(
-                    <button key={t.id} onClick={()=>setTab(t.id as any)} style={{
-                      flex:1, padding: isMobile ? '8px 6px' : '9px 12px', borderRadius:'8px',border:'none',
-                      cursor:'pointer', fontSize: isMobile ? '12px' : '13px', fontWeight:600,transition:'all .2s',
-                      display:'flex',alignItems:'center',justifyContent:'center',gap:'5px',
-                      background:tab===t.id?'linear-gradient(135deg,#00A8E8,#00D4FF)':'transparent',
-                      color:tab===t.id?'#000':'var(--t2)'
-                    }}>
+                    <button key={t.id} onClick={()=>setTab(t.id as any)} style={{flex:1, padding: isMobile ? '8px 6px' : '9px 12px', borderRadius:'8px',border:'none',cursor:'pointer', fontSize: isMobile ? '12px' : '13px', fontWeight:600,transition:'all .2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'5px',background:tab===t.id?'linear-gradient(135deg,#00A8E8,#00D4FF)':'transparent',color:tab===t.id?'#000':'var(--t2)'}}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={t.icon}/></svg>
                       {t.label}
                     </button>
@@ -434,32 +408,17 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
                         </svg>
                       </div>
-                      <input type="url" value={url} onChange={e=>setUrl(e.target.value)}
-                        placeholder="https://drive.google.com/..."
-                        style={{...inputStyle,paddingLeft:'36px'}}/>
+                      <input type="url" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://drive.google.com/..." style={{...inputStyle,paddingLeft:'36px'}}/>
                     </div>
                     <p style={{fontSize:'10px',color:'var(--t3)',marginTop:'4px',lineHeight:1.5}}>
-                        El link debe ser público ("cualquiera con el enlace"). Si tienes problemas con la URL, sube el archivo directamente desde tu PC (tab "Subir archivo") — funciona mejor.
-                      </p>
+                      El link debe ser público. Si tienes problemas con la URL, sube el archivo directamente.
+                    </p>
                   </div>
                 )}
 
                 {tab === 'file' && (
                   <div style={{marginBottom: isMobile ? '10px' : '16px'}}>
-                    <div
-                      onDragOver={e=>{e.preventDefault();setDrag(true)}}
-                      onDragLeave={()=>setDrag(false)}
-                      onDrop={onDrop}
-                      onClick={()=>fileRef.current?.click()}
-                      style={{
-                        border:`2px dashed ${drag||archivo?'var(--c)':'rgba(0,168,232,.18)'}`,
-                        borderRadius:'12px',
-                        // FIX: zona compacta en mobile para dejar espacio al botón
-                        padding: isMobile ? '14px' : '24px',
-                        textAlign:'center',cursor:'pointer',
-                        background:drag?'rgba(0,168,232,.07)':archivo?'rgba(0,229,160,.04)':'rgba(0,168,232,.02)',
-                        transition:'all .3s'
-                      }}>
+                    <div onDragOver={e=>{e.preventDefault();setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={onDrop} onClick={()=>fileRef.current?.click()} style={{border:`2px dashed ${drag||archivo?'var(--c)':'rgba(0,168,232,.18)'}`,borderRadius:'12px',padding: isMobile ? '14px' : '24px',textAlign:'center',cursor:'pointer',background:drag?'rgba(0,168,232,.07)':archivo?'rgba(0,229,160,.04)':'rgba(0,168,232,.02)',transition:'all .3s'}}>
                       {archivo ? (
                         <div>
                           <div style={{width:'32px',height:'32px',background:'rgba(0,229,160,.1)',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 6px'}}>
@@ -485,7 +444,6 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                   </div>
                 )}
 
-                {/* Nombre del curso */}
                 <div style={{marginBottom: isMobile ? '10px' : '14px'}}>
                   <label style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',letterSpacing:'1.5px',textTransform:'uppercase' as const,display:'block',marginBottom:'5px'}}>Nombre del curso</label>
                   <div style={{position:'relative' as const}}>
@@ -494,133 +452,40 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                         <path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
                       </svg>
                     </div>
-                    <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)}
-                      placeholder="Ej: Excel Avanzado 2026"
-                      style={{...inputStyle,padding:'10px 12px 10px 32px'}}/>
+                    <input type="text" value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Ej: Excel Avanzado 2026" style={{...inputStyle,padding:'10px 12px 10px 32px'}}/>
                   </div>
                 </div>
-{/* ⚙️ Configuración del procesamiento (v13.1 multi-select) */}
-<div style={{
-  marginBottom: isMobile ? '8px' : '12px',
-  padding: '8px 10px',
-  background: 'rgba(0,168,232,.04)',
-  border: `1px solid ${tipoContenido.length > 0 ? 'rgba(0,168,232,.18)' : 'rgba(255,70,100,.3)'}`,
-  borderRadius: '10px',
-  transition: 'border-color .2s'
-}}>
-  {/* Label del grupo */}
-  <div style={{
-    fontSize:'10px',fontWeight:700,
-    color: tipoContenido.length > 0 ? 'var(--t3)' : 'var(--err)',
-    letterSpacing:'1px',textTransform:'uppercase' as const,
-    marginBottom:'6px'
-  }}>
-    Tipo de contenido <span style={{color:'var(--err)'}}>*</span>
-    <span style={{
-      color:'var(--t3)',
-      fontWeight:500,
-      textTransform:'none' as const,
-      letterSpacing:0,
-      marginLeft:'6px',
-      fontSize:'9px'
-    }}>
-      (marca todas las que aplican)
-    </span>
-  </div>
 
-  {/* 4 checkboxes tipo "pill" en fila — wrap automático en mobile */}
-  <div style={{
-    display:'flex',
-    gap:'6px',
-    flexWrap:'wrap' as const,
-    marginBottom:'6px'
-  }}>
-    {[
-      {val:'Diapositivas', label:'Diapositivas'},
-      {val:'Software',     label:'Software'},
-      {val:'Pizarra',      label:'Pizarra'},
-      {val:'Sin pantalla', label:'Sin pantalla'}
-    ].map(opt => {
-      const activo = tipoContenido.includes(opt.val)
-      return (
-        <button
-          key={opt.val}
-          type="button"
-          onClick={() => toggleTipo(opt.val)}
-          style={{
-            display:'flex',
-            alignItems:'center',
-            gap:'5px',
-            padding:'5px 10px',
-            background: activo ? 'rgba(0,168,232,0.15)' : 'rgba(12,16,24,0.6)',
-            border:`1px solid ${activo ? 'var(--c)' : 'rgba(240,246,252,0.12)'}`,
-            borderRadius:'7px',
-            color: activo ? 'var(--c)' : 'var(--t2)',
-            fontSize:'11px',
-            fontWeight: activo ? 700 : 500,
-            cursor:'pointer',
-            transition:'all .15s',
-            fontFamily:'inherit'
-          }}
-        >
-          <span style={{
-            width:'12px',height:'12px',
-            borderRadius:'3px',
-            border:`1.5px solid ${activo ? 'var(--c)' : 'rgba(240,246,252,0.25)'}`,
-            background: activo ? 'var(--c)' : 'transparent',
-            display:'flex',alignItems:'center',justifyContent:'center',
-            flexShrink:0
-          }}>
-            {activo && (
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-            )}
-          </span>
-          {opt.label}
-        </button>
-      )
-    })}
-  </div>
+                <div style={{marginBottom: isMobile ? '8px' : '12px',padding: '8px 10px',background: 'rgba(0,168,232,.04)',border: `1px solid ${tipoContenido.length > 0 ? 'rgba(0,168,232,.18)' : 'rgba(255,70,100,.3)'}`,borderRadius: '10px',transition: 'border-color .2s'}}>
+                  <div style={{fontSize:'10px',fontWeight:700,color: tipoContenido.length > 0 ? 'var(--t3)' : 'var(--err)',letterSpacing:'1px',textTransform:'uppercase' as const,marginBottom:'6px'}}>
+                    Tipo de contenido <span style={{color:'var(--err)'}}>*</span>
+                    <span style={{color:'var(--t3)',fontWeight:500,textTransform:'none' as const,letterSpacing:0,marginLeft:'6px',fontSize:'9px'}}>(marca todas las que aplican)</span>
+                  </div>
+                  <div style={{display:'flex',gap:'6px',flexWrap:'wrap' as const,marginBottom:'6px'}}>
+                    {[{val:'Diapositivas', label:'Diapositivas'},{val:'Software',label:'Software'},{val:'Pizarra',label:'Pizarra'},{val:'Sin pantalla',label:'Sin pantalla'}].map(opt => {
+                      const activo = tipoContenido.includes(opt.val)
+                      return (
+                        <button key={opt.val} type="button" onClick={() => toggleTipo(opt.val)} style={{display:'flex',alignItems:'center',gap:'5px',padding:'5px 10px',background: activo ? 'rgba(0,168,232,0.15)' : 'rgba(12,16,24,0.6)',border:`1px solid ${activo ? 'var(--c)' : 'rgba(240,246,252,0.12)'}`,borderRadius:'7px',color: activo ? 'var(--c)' : 'var(--t2)',fontSize:'11px',fontWeight: activo ? 700 : 500,cursor:'pointer',transition:'all .15s',fontFamily:'inherit'}}>
+                          <span style={{width:'12px',height:'12px',borderRadius:'3px',border:`1.5px solid ${activo ? 'var(--c)' : 'rgba(240,246,252,0.25)'}`,background: activo ? 'var(--c)' : 'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                            {activo && <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                          </span>
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div style={{display:'flex',gap:'12px',flexWrap:'wrap' as const,fontSize:'11px',color:'var(--t2)',paddingTop:'4px',borderTop:'1px solid rgba(240,246,252,0.06)',marginTop:'2px'}}>
+                    <label style={{display:'flex',alignItems:'center',gap:'5px',cursor:'pointer',userSelect:'none' as const}}>
+                      <input type="checkbox" checked={mantenerInteracciones} onChange={e=>setMantenerInteracciones(e.target.checked)} style={{cursor:'pointer', accentColor:'var(--c)', width:'13px', height:'13px'}}/>
+                      <span>Mantener interacciones con alumnos</span>
+                    </label>
+                    <label style={{display:'flex',alignItems:'center',gap:'5px',cursor:'pointer',userSelect:'none' as const}}>
+                      <input type="checkbox" checked={permitirCapsulasLargas} onChange={e=>setPermitirCapsulasLargas(e.target.checked)} style={{cursor:'pointer', accentColor:'var(--c)', width:'13px', height:'13px'}}/>
+                      <span>Permitir cápsulas largas</span>
+                    </label>
+                  </div>
+                </div>
 
-  {/* 2 checkboxes pedagógicos — mismo estilo */}
-  <div style={{
-    display:'flex',
-    gap:'12px',
-    flexWrap:'wrap' as const,
-    fontSize:'11px',
-    color:'var(--t2)',
-    paddingTop:'4px',
-    borderTop:'1px solid rgba(240,246,252,0.06)',
-    marginTop:'2px'
-  }}>
-    <label style={{
-      display:'flex',alignItems:'center',gap:'5px',
-      cursor:'pointer',userSelect:'none' as const
-    }}>
-      <input
-        type="checkbox"
-        checked={mantenerInteracciones}
-        onChange={e=>setMantenerInteracciones(e.target.checked)}
-        style={{cursor:'pointer', accentColor:'var(--c)', width:'13px', height:'13px'}}
-      />
-      <span>Mantener interacciones con alumnos</span>
-    </label>
-    <label style={{
-      display:'flex',alignItems:'center',gap:'5px',
-      cursor:'pointer',userSelect:'none' as const
-    }}>
-      <input
-        type="checkbox"
-        checked={permitirCapsulasLargas}
-        onChange={e=>setPermitirCapsulasLargas(e.target.checked)}
-        style={{cursor:'pointer', accentColor:'var(--c)', width:'13px', height:'13px'}}
-      />
-      <span>Permitir cápsulas largas</span>
-    </label>
-  </div>
-</div>
-                {/* Error */}
                 {error && (
                   <div style={{padding:'10px 12px',borderRadius:'9px',fontSize:'12px',marginBottom:'10px',background:'rgba(255,70,100,.08)',border:'1px solid rgba(255,70,100,.2)',color:'var(--err)',display:'flex',alignItems:'flex-start',gap:'7px'}}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--err)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{flexShrink:0,marginTop:'1px'}}>
@@ -635,23 +500,7 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
                   </div>
                 )}
 
-                {/* BOTÓN PRINCIPAL */}
-                <button
-                  onClick={handleProcesar}
-                  onMouseEnter={()=>setBtnHover(true)}
-                  onMouseLeave={()=>setBtnHover(false)}
-                  style={{
-                    width:'100%',
-                    padding: isMobile ? '13px' : '15px',
-                    background:btnHover?'linear-gradient(135deg,#00B8F8,#00E4FF)':'linear-gradient(135deg,#00A8E8,#00D4FF)',
-                    color:'#000',border:'none',borderRadius:'10px',
-                    fontFamily:"'Cabinet Grotesk',sans-serif",
-                    fontSize: isMobile ? '15px' : '16px',fontWeight:900,cursor:'pointer',
-                    display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',
-                    boxShadow:btnHover?'0 8px 32px rgba(0,168,232,.55)':'0 4px 20px rgba(0,168,232,.35)',
-                    transition:'all .25s cubic-bezier(.23,1,.32,1)',
-                    position:'relative' as const,overflow:'hidden'
-                  }}>
+                <button onClick={handleProcesar} onMouseEnter={()=>setBtnHover(true)} onMouseLeave={()=>setBtnHover(false)} style={{width:'100%',padding: isMobile ? '13px' : '15px',background:btnHover?'linear-gradient(135deg,#00B8F8,#00E4FF)':'linear-gradient(135deg,#00A8E8,#00D4FF)',color:'#000',border:'none',borderRadius:'10px',fontFamily:"'Cabinet Grotesk',sans-serif",fontSize: isMobile ? '15px' : '16px',fontWeight:900,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px',boxShadow:btnHover?'0 8px 32px rgba(0,168,232,.55)':'0 4px 20px rgba(0,168,232,.35)',transition:'all .25s cubic-bezier(.23,1,.32,1)',position:'relative' as const,overflow:'hidden'}}>
                   <div style={{position:'absolute' as const,inset:0,background:'linear-gradient(135deg,rgba(255,255,255,.15),transparent)',pointerEvents:'none'}}/>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
@@ -671,7 +520,6 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
           </div>
         </div>
 
-        {/* PANEL DERECHO solo desktop */}
         {!isMobile && (
           <div style={{width:'260px',flexShrink:0,padding:'32px 20px',display:'flex',flexDirection:'column' as const,gap:'16px',borderLeft:'1px solid var(--b)',overflowY:'auto' as const}}>
             <div style={{background:'linear-gradient(135deg,rgba(0,168,232,.08),rgba(0,168,232,.03))',border:'1px solid rgba(0,168,232,.2)',borderRadius:'12px',padding:'16px'}}>
@@ -724,7 +572,6 @@ localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
-        /* FIX fondo blanco inputs en móvil */
         input, select, textarea { color-scheme: dark; }
         input:focus, select:focus, textarea:focus {
           border-color: rgba(0,168,232,.5) !important;
