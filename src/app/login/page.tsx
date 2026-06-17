@@ -10,6 +10,14 @@ const PAISES = [
 ]
 const TIPOS_DOCUMENTO = ['DNI','RUC','Pasaporte','Tax ID','Cédula','Otro']
 
+// Slugs de plan que llegan por ?plan= desde la web pública (deben coincidir con plans.ts)
+const PLAN_NOMBRES: Record<string, string> = {
+  basico: 'Básico',
+  estandar: 'Estándar',
+  premium: 'Premium',
+  empresarial: 'Empresarial',
+}
+
 const ENTREGABLES = [
   { icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', label: 'Cápsulas de video pedagógicas', color: '#E25C5C' },
   { icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6', label: 'Documentos Word editables', color: '#4A90D9' },
@@ -19,7 +27,6 @@ const ENTREGABLES = [
   { icon: 'M21 8l-8-5-8 5v10l8 5 8-5V8z', label: 'ZIP listo para Moodle y Canvas', color: '#A078FF' },
 ]
 
-// ── CustomSelect — reemplaza <select> nativo completamente ───────────────────
 function CustomSelect({
   value, onChange, options, placeholder, style = {}
 }: {
@@ -32,7 +39,6 @@ function CustomSelect({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
-  // Cerrar al hacer click fuera
   useEffect(() => {
     if (!open) return
     const handler = (e: MouseEvent) => {
@@ -44,7 +50,6 @@ function CustomSelect({
 
   return (
     <div ref={ref} style={{ position: 'relative', ...style }}>
-      {/* Trigger */}
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
@@ -69,7 +74,6 @@ function CustomSelect({
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {value || placeholder}
         </span>
-        {/* Chevron */}
         <svg
           width="14" height="14" viewBox="0 0 24 24" fill="none"
           stroke="#667788" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -83,7 +87,6 @@ function CustomSelect({
         </svg>
       </button>
 
-      {/* Dropdown list — 100% custom, sin OS */}
       {open && (
         <div style={{
           position: 'absolute',
@@ -135,8 +138,6 @@ function CustomSelect({
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 export default function Login() {
   const [mode, setMode] = useState<'login'|'register'>('login')
   const [email, setEmail] = useState('')
@@ -151,12 +152,21 @@ export default function Login() {
   const [error, setError] = useState('')
   const [mounted, setMounted] = useState(false)
   const [activeItem, setActiveItem] = useState(0)
+  const [planSlug, setPlanSlug] = useState('')
   const router = useRouter()
 
   useEffect(() => {
     setMounted(true)
     const interval = setInterval(() => setActiveItem(v => (v + 1) % ENTREGABLES.length), 2000)
     return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    const p = (new URLSearchParams(window.location.search).get('plan') || '').toLowerCase()
+    if (PLAN_NOMBRES[p]) {
+      setPlanSlug(p)
+      setMode('register') // viene a comprar → abrir pestaña de registro
+    }
   }, [])
 
   async function handleSubmit() {
@@ -183,6 +193,7 @@ export default function Login() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Error desconocido'); setLoading(false); return }
       localStorage.setItem('gisto_user', JSON.stringify(data.user))
+      if (planSlug) localStorage.setItem('gisto_plan_intent', planSlug)
       router.push('/dashboard')
     } catch {
       setError('Error de conexión. Inténtalo de nuevo.')
@@ -217,7 +228,6 @@ export default function Login() {
       minHeight: '100vh', display: 'flex',
       background: 'var(--bg)', position: 'relative' as const, overflow: 'hidden'
     }}>
-      {/* ── Panel izquierdo ─────────────────────────────────────────────── */}
       <div style={{
         flex: '0 0 48%', display: 'flex', flexDirection: 'column' as const,
         justifyContent: 'center', padding: '60px 56px',
@@ -318,12 +328,36 @@ export default function Login() {
         </div>
       </div>
 
-      {/* ── Panel derecho — Formulario ───────────────────────────────────── */}
       <div style={{
         flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '40px 48px', overflowY: 'auto'
       }} className="login-right">
         <div style={{ width: '100%', maxWidth: '420px' }}>
+
+          {planSlug && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              background: 'rgba(0,168,232,0.08)',
+              border: '1px solid rgba(0,168,232,0.25)',
+              borderRadius: '12px', padding: '12px 14px', marginBottom: '20px'
+            }}>
+              <div style={{
+                width: '30px', height: '30px', borderRadius: '8px', flexShrink: 0,
+                background: 'rgba(0,168,232,0.15)', border: '1px solid rgba(0,168,232,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                  stroke="#00A8E8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                </svg>
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--t1)', lineHeight: 1.45 }}>
+                Estás a un paso de adquirir el{' '}
+                <strong style={{ color: '#00A8E8' }}>Plan {PLAN_NOMBRES[planSlug]}</strong>.{' '}
+                Crea tu cuenta para continuar.
+              </div>
+            </div>
+          )}
 
           <div style={{ marginBottom: '28px' }}>
             <h2 style={{
@@ -338,7 +372,6 @@ export default function Login() {
             </p>
           </div>
 
-          {/* Tabs */}
           <div style={{
             display: 'flex', gap: '3px', background: 'rgba(255,255,255,0.04)',
             padding: '3px', borderRadius: '11px', marginBottom: '24px',
@@ -359,7 +392,6 @@ export default function Login() {
             ))}
           </div>
 
-          {/* Campos */}
           <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '14px', marginBottom: '20px' }}>
             {mode === 'register' && (
               <div>
@@ -392,28 +424,15 @@ export default function Login() {
                   Datos de facturación
                 </div>
 
-                {/* País — CustomSelect, sin select nativo */}
                 <div>
                   <label style={labelStyle}>País *</label>
-                  <CustomSelect
-                    value={pais}
-                    onChange={setPais}
-                    options={PAISES}
-                    placeholder="Selecciona tu país"
-                  />
+                  <CustomSelect value={pais} onChange={setPais} options={PAISES} placeholder="Selecciona tu país"/>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '10px' }}>
-                  {/* Tipo documento — CustomSelect */}
                   <div>
                     <label style={labelStyle}>Tipo doc. *</label>
-                    <CustomSelect
-                      value={tipoDocumento}
-                      onChange={setTipoDocumento}
-                      options={TIPOS_DOCUMENTO}
-                      placeholder="Tipo"
-                      style={{ fontSize: '13px' }}
-                    />
+                    <CustomSelect value={tipoDocumento} onChange={setTipoDocumento} options={TIPOS_DOCUMENTO} placeholder="Tipo" style={{ fontSize: '13px' }}/>
                   </div>
                   <div>
                     <label style={labelStyle}>N° documento *</label>
@@ -438,7 +457,6 @@ export default function Login() {
             )}
           </div>
 
-          {/* Términos */}
           {mode === 'register' && (
             <div style={{ marginBottom: '16px' }}>
               <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
@@ -471,7 +489,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Error */}
           {error && (
             <div style={{
               padding: '12px 16px', borderRadius: '10px', fontSize: '13px',
@@ -489,7 +506,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Botón principal */}
           <button onClick={handleSubmit} disabled={botonDeshabilitado} style={{
             width: '100%', padding: '15px',
             background: botonDeshabilitado ? 'rgba(0,168,232,.25)' : 'linear-gradient(135deg,#00A8E8,#00D4FF)',
@@ -545,7 +561,6 @@ export default function Login() {
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg) } }
-        /* FIX definitivo: inputs con fondo oscuro hardcodeado, sin depender de vars CSS */
         input {
           background-color: rgba(12,16,24,0.85) !important;
           color: #f0f6fc !important;
@@ -560,7 +575,6 @@ export default function Login() {
           transform: translateY(-2px);
           box-shadow: 0 12px 32px rgba(0,168,232,.5) !important;
         }
-        /* Scrollbar del dropdown */
         .custom-select-list::-webkit-scrollbar { width: 4px; }
         .custom-select-list::-webkit-scrollbar-track { background: transparent; }
         .custom-select-list::-webkit-scrollbar-thumb { background: rgba(0,168,232,.3); border-radius: 2px; }
