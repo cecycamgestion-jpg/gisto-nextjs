@@ -2,18 +2,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-
-const MAX_CREDITOS: any = {
-  'Free':40,'Starter':120,'Professional':480,'Profesional':480,'Academia':1200,'academia':1200
-}
-const PLAN_COLORS: any = {
-  'Free':'#8899aa','Starter':'#00A8E8',
-  'Professional':'#00E5A0','Profesional':'#00E5A0','Academia':'#FFB020'
-}
-const PLAN_BG: any = {
-  'Free':'rgba(136,153,170,.06)','Starter':'rgba(0,168,232,.08)',
-  'Professional':'rgba(0,229,160,.08)','Profesional':'rgba(0,229,160,.08)','Academia':'rgba(255,176,32,.08)'
-}
+import {
+  resolverPlan,
+  getPlan,
+  PLAN_MAX_MINUTOS as MAX_CREDITOS,
+  PLAN_COLORS,
+  PLAN_BG,
+} from '@/lib/plans'
 const PROGRESS_MSGS = [
   'Transcribiendo el audio...','Analizando estructura pedagógica...',
   'Limpiando interacciones del aula...','Aplicando corte anatómico...',
@@ -29,7 +24,7 @@ const ERRORES_CORTE = [
 type ValorCorte = 'bien' | 'malo' | null
 interface EstadoCapsula {
   val: ValorCorte
-  errores: string[]   // ahora es array (múltiples checkboxes)
+  errores: string[]
 }
 interface FeedbackVideo { [capId: string]: EstadoCapsula }
 
@@ -52,10 +47,7 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
   const setVal = (capId: string, val: ValorCorte) =>
     setEstado(prev => ({
       ...prev,
-      [capId]: {
-        val,
-        errores: val === 'bien' ? [] : prev[capId]?.errores ?? []
-      }
+      [capId]: { val, errores: val === 'bien' ? [] : prev[capId]?.errores ?? [] }
     }))
 
   const toggleError = (capId: string, errId: string) =>
@@ -66,7 +58,6 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
       return { ...prev, [capId]: { ...prev[capId], errores: nuevos } }
     })
 
-  // Todas respondidas: cada cápsula tiene val !== null, y las "malo" tienen al menos 1 error marcado
   const todoRespondido = capsulas.length > 0 && capsulas.every(c => {
     const s = estado[c.id]
     if (!s || s.val === null) return false
@@ -78,25 +69,20 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
     setEnviando(true)
     const buenos = capsulas.filter(c => estado[c.id]?.val === 'bien').length
     const malos  = capsulas.filter(c => estado[c.id]?.val === 'malo')
-
-    // Map id -> label corto para el resumen
     const labelCorto: Record<string,string> = {
       'corto_despues': 'cortar antes',
       'corto_antes':   'cortar después',
       'mezcla_temas':  'mezcla de temas'
     }
-
     let resumen = malos.length === 0
       ? `${buenos} correctas`
       : `${buenos} correctas · ${malos.length} con error: ${malos.map(c => {
           const errs = (estado[c.id].errores || []).map(e => labelCorto[e] || e).join('+')
           return `${c.id}:${errs}`
         }).join(', ')}`
-
     if (comentarioGlobal.trim()) {
       resumen += ` | Nota: ${comentarioGlobal.trim().slice(0, 300)}`
     }
-
     try {
       await fetch('/api/airtable/feedback', {
         method: 'POST',
@@ -135,9 +121,8 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
       {abierto && (
         <div style={{ borderTop: '1px solid rgba(240,246,252,.06)', padding: '12px 14px 14px', background: 'rgba(255,255,255,.015)', borderRadius: '0 0 14px 14px' }}>
           <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '10px', lineHeight: 1.4 }}>
-            Marque cada cápsula. Solo las <span style={{ color: '#e24b4a' }}>Malo</span> necesitan detalle. Puede marcar varios motivos si aplican.
+            Marque cada cápsula. Solo las <span style={{ color: '#e24b4a' }}>Malo</span> necesitan detalle.
           </p>
-
           {capsulas.map((cap, idx) => {
             const s = estado[cap.id] || { val: null, errores: [] }
             const isLast = idx === capsulas.length - 1
@@ -157,46 +142,14 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
                 </div>
                 {s.val === 'malo' && (
                   <div style={{ margin: '5px 0 6px 24px', padding: '8px 10px', background: 'rgba(226,75,75,.04)', border: '1px solid rgba(226,75,75,.15)', borderRadius: '8px' }}>
-                    <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '6px' }}>¿Qué le faltó? (puede marcar varios)</p>
+                    <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '6px' }}>¿Qué le faltó?</p>
                     <div style={{ display: 'flex', flexDirection: 'column' as const, gap: '6px' }}>
                       {ERRORES_CORTE.map(err => {
                         const activo = s.errores.includes(err.id)
                         return (
-                          <button
-                            key={err.id}
-                            onClick={() => toggleError(cap.id, err.id)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              padding: '6px 10px',
-                              borderRadius: '7px',
-                              border: 'none',
-                              cursor: 'pointer',
-                              fontSize: '11px',
-                              textAlign: 'left' as const,
-                              background: activo ? 'rgba(226,75,75,.15)' : 'rgba(255,255,255,.04)',
-                              color: activo ? '#e24b4a' : 'var(--t2)',
-                              outline: activo ? '1px solid rgba(226,75,75,.35)' : '1px solid rgba(240,246,252,.08)',
-                              fontWeight: activo ? 600 : 400,
-                              transition: 'all .15s'
-                            }}>
-                            <span style={{
-                              width: '14px',
-                              height: '14px',
-                              borderRadius: '3px',
-                              border: activo ? '1.5px solid #e24b4a' : '1.5px solid rgba(255,255,255,.2)',
-                              background: activo ? '#e24b4a' : 'transparent',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              {activo && (
-                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <polyline points="20 6 9 17 4 12"/>
-                                </svg>
-                              )}
+                          <button key={err.id} onClick={() => toggleError(cap.id, err.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '7px', border: 'none', cursor: 'pointer', fontSize: '11px', textAlign: 'left' as const, background: activo ? 'rgba(226,75,75,.15)' : 'rgba(255,255,255,.04)', color: activo ? '#e24b4a' : 'var(--t2)', outline: activo ? '1px solid rgba(226,75,75,.35)' : '1px solid rgba(240,246,252,.08)', fontWeight: activo ? 600 : 400, transition: 'all .15s' }}>
+                            <span style={{ width: '14px', height: '14px', borderRadius: '3px', border: activo ? '1.5px solid #e24b4a' : '1.5px solid rgba(255,255,255,.2)', background: activo ? '#e24b4a' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              {activo && <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
                             </span>
                             {err.label}
                           </button>
@@ -208,34 +161,11 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
               </div>
             )
           })}
-
-          {/* Campo libre opcional al final */}
           <div style={{ marginTop: '12px' }}>
-            <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '5px' }}>¿Algo más que quieras contarnos? (opcional)</p>
-            <textarea
-              value={comentarioGlobal}
-              onChange={e => setComentarioGlobal(e.target.value)}
-              placeholder="Ej: El docente mencionó datos de contacto al final, o falta contexto al inicio..."
-              maxLength={300}
-              rows={2}
-              style={{
-                width: '100%',
-                background: 'rgba(255,255,255,.03)',
-                border: '1px solid rgba(240,246,252,.08)',
-                borderRadius: '7px',
-                padding: '8px 10px',
-                fontSize: '11px',
-                color: 'var(--t1)',
-                fontFamily: 'inherit',
-                resize: 'vertical' as const,
-                outline: 'none'
-              }}
-            />
-            <div style={{ fontSize: '9px', color: 'var(--t3)', textAlign: 'right' as const, marginTop: '2px' }}>
-              {comentarioGlobal.length}/300
-            </div>
+            <p style={{ fontSize: '10px', color: 'var(--t3)', marginBottom: '5px' }}>¿Algo más? (opcional)</p>
+            <textarea value={comentarioGlobal} onChange={e => setComentarioGlobal(e.target.value)} placeholder="Ej: El docente mencionó datos de contacto al final..." maxLength={300} rows={2} style={{ width: '100%', background: 'rgba(255,255,255,.03)', border: '1px solid rgba(240,246,252,.08)', borderRadius: '7px', padding: '8px 10px', fontSize: '11px', color: 'var(--t1)', fontFamily: 'inherit', resize: 'vertical' as const, outline: 'none' }}/>
+            <div style={{ fontSize: '9px', color: 'var(--t3)', textAlign: 'right' as const, marginTop: '2px' }}>{comentarioGlobal.length}/300</div>
           </div>
-
           <button onClick={enviarFeedback} disabled={!todoRespondido || enviando} style={{ marginTop: '12px', width: '100%', padding: '9px', background: todoRespondido ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'rgba(0,168,232,.15)', color: todoRespondido ? '#000' : 'rgba(255,255,255,.3)', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: 700, cursor: todoRespondido ? 'pointer' : 'not-allowed', transition: 'all .2s' }}>
             {enviando ? 'Enviando...' : 'Enviar feedback →'}
           </button>
@@ -244,7 +174,6 @@ function FeedbackPanel({ record, modulos }: { record: any; modulos: number }) {
     </>
   )
 }
-
 
 function fmtHoras(min: number): string {
   if (!min || min <= 0) return '0 min'
@@ -313,7 +242,6 @@ export default function Dashboard() {
   const [statsVisible, setStatsVisible] = useState(false)
   const [busqueda, setBusqueda] = useState('')
   const [etiquetasMap, setEtiquetasMap] = useState<Record<string, { texto: string; color: string }>>({})
-  const COLORES_ETIQUETA = ['#00A8E8','#00E5A0','#A078FF','#FFB020','#E25C5C','#00D4FF']
   const statsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -347,15 +275,14 @@ export default function Dashboard() {
     if (!u) { router.push('/login'); return }
     const parsed = JSON.parse(u)
     setUser(parsed); setCreditos(parsed.creditos || 0)
-    setCreditosMax(MAX_CREDITOS[parsed.plan] || 40)
+    setCreditosMax(MAX_CREDITOS[resolverPlan(parsed.plan)])
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
     fetch('/api/airtable/usuario').then(r => r.json()).then(data => {
       if (data.error) return
       const credAirtable = data.creditos || 0; const plan = data.plan || 'Free'
-      // FIX: respetar deducciones pendientes — usar el menor valor entre localStorage y Airtable
       const credLocal = parsed.creditos || 0
       const cred = Math.min(credLocal, credAirtable)
-      setCreditos(cred); setCreditosMax(MAX_CREDITOS[plan] || 40)
+      setCreditos(cred); setCreditosMax(MAX_CREDITOS[resolverPlan(plan)])
       if (data.avatar_url) setAvatarUrl(data.avatar_url)
       const updated = { ...parsed, creditos: cred, plan, nombre: data.nombre, avatarUrl: data.avatar_url || '' }
       localStorage.setItem('gisto_user', JSON.stringify(updated)); setUser(updated)
@@ -413,7 +340,8 @@ export default function Dashboard() {
     return matchBusqueda && matchFiltro
   })
 
-  const planActual = user?.plan || 'Free'
+  const planActual = resolverPlan(user?.plan)
+  const planNombre = getPlan(user?.plan).nombre
   const inicial = user?.nombre?.[0]?.toUpperCase() || 'U'
   const porcentaje = creditosMax > 0 ? Math.max(2, Math.min(100, (creditos / creditosMax) * 100)) : 2
 
@@ -424,6 +352,16 @@ export default function Dashboard() {
       {badge ? <span style={{ marginLeft: 'auto', background: 'var(--warn)', color: '#000', fontSize: '10px', fontWeight: 800, padding: '1px 7px', borderRadius: '100px' }}>{badge}</span> : null}
     </Link>
   )
+
+  function estadoHumano(e: string): { label: string; color: string; bg: string; border: string; dot?: boolean } {
+    const lower = e?.toLowerCase() || ''
+    if (lower === 'completado') return { label: 'Listo para descargar', color: '#00E5A0', bg: 'rgba(0,229,160,.1)', border: 'rgba(0,229,160,.25)' }
+    if (lower === 'procesando') return { label: 'Procesando', color: '#FFB020', bg: 'rgba(255,176,32,.1)', border: 'rgba(255,176,32,.25)', dot: true }
+    if (lower === 'pendiente')  return { label: 'Recibido', color: '#00A8E8', bg: 'rgba(0,168,232,.1)', border: 'rgba(0,168,232,.25)', dot: true }
+    if (lower === 'en_revision' || lower === 'en revisión') return { label: 'En revisión', color: '#A078FF', bg: 'rgba(160,120,255,.1)', border: 'rgba(160,120,255,.25)', dot: true }
+    if (lower.includes('error')) return { label: 'Error — contacta soporte', color: '#E25C5C', bg: 'rgba(226,92,92,.1)', border: 'rgba(226,92,92,.25)' }
+    return { label: e, color: '#667788', bg: 'rgba(255,255,255,.05)', border: 'rgba(255,255,255,.1)' }
+  }
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', position: 'relative' as const, zIndex: 1 }}>
@@ -436,7 +374,7 @@ export default function Dashboard() {
         </Link>
         <NavItem href="/dashboard" label="Dashboard" icon="M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z" active={true}/>
         <NavItem href="/upload" label="Subir video" icon="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" active={false} badge={enProceso || undefined}/>
-        <NavItem href="/perfil" label="Mi perfil" icon="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" active={false}/>
+        <NavItem href="/perfil" label="Mi perfil" icon="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" active={false}/>
         <NavItem href="/planes" label="Planes y pagos" icon="M1 4h22v16H1zM1 10h22" active={false}/>
         <div style={{ marginTop: 'auto', background: 'rgba(0,168,232,.06)', border: '1px solid var(--b)', borderRadius: '12px', padding: '14px' }}>
           <div style={{ fontSize: '11px', color: 'var(--t2)', marginBottom: '8px' }}>Créditos disponibles</div>
@@ -449,7 +387,7 @@ export default function Dashboard() {
           </div>
           <div style={{ marginTop: '6px' }}>
             <Link href="/planes" style={{ textDecoration: 'none' }}>
-              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: PLAN_COLORS[planActual]||'#00A8E8', background: PLAN_BG[planActual]||'rgba(0,168,232,.08)', border: `1px solid ${PLAN_COLORS[planActual]||'#00A8E8'}30` }}>{planActual}</span>
+              <span style={{ display: 'inline-block', fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '100px', color: PLAN_COLORS[planActual]||'#00A8E8', background: PLAN_BG[planActual]||'rgba(0,168,232,.08)', border: `1px solid ${PLAN_COLORS[planActual]||'#00A8E8'}30` }}>{planNombre}</span>
             </Link>
           </div>
         </div>
@@ -459,7 +397,7 @@ export default function Dashboard() {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: '13px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{user?.nombre || 'Usuario'}</div>
-            <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{planActual}</div>
+            <div style={{ fontSize: '11px', color: 'var(--t2)' }}>{planNombre}</div>
           </div>
         </Link>
         <button onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', color: 'var(--err)', background: 'none', border: 'none', borderRadius: '9px', marginTop: '6px', fontSize: '14px', fontWeight: 500, cursor: 'pointer', width: '100%' }}>
@@ -485,9 +423,58 @@ export default function Dashboard() {
         </div>
 
         <div style={{ padding: isMobile ? '14px' : '24px 28px', flex: 1 }}>
+          {(() => {
+            if (loading) return null
+            const esDemo = planActual === 'demo'
+            const sinCreditos = creditos <= 0
+            if (!esDemo && !sinCreditos) return null
+            let titulo: string, texto: string, cta: string
+            if (esDemo && !sinCreditos) {
+              titulo = 'Estás en modo demo'
+              texto = 'Tu saldo de prueba sirve para conocer GISTO. Al adquirir un plan, los minutos de la prueba no se acumulan.'
+              cta = 'Ver planes →'
+            } else if (esDemo && sinCreditos) {
+              titulo = 'Agotaste tu demo'
+              texto = 'Para seguir procesando tus clases, elige un plan. Tus créditos no vencen.'
+              cta = 'Elegir un plan →'
+            } else {
+              titulo = 'Te quedaste sin créditos'
+              texto = 'Recarga horas para seguir procesando. Tus créditos no vencen.'
+              cta = 'Recargar →'
+            }
+            return (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' as const,
+                background: 'linear-gradient(135deg, rgba(0,168,232,.08), rgba(0,168,232,.02))',
+                border: '1px solid rgba(0,168,232,.25)', borderRadius: '14px',
+                padding: isMobile ? '14px 16px' : '16px 20px',
+                marginBottom: isMobile ? '14px' : '20px'
+              }}>
+                <div style={{
+                  width: '38px', height: '38px', borderRadius: '10px', flexShrink: 0,
+                  background: 'rgba(0,168,232,.15)', border: '1px solid rgba(0,168,232,.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#00A8E8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M1 4h22v16H1zM1 10h22"/>
+                  </svg>
+                </div>
+                <div style={{ flex: 1, minWidth: '180px' }}>
+                  <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontWeight: 800, fontSize: isMobile ? '14px' : '15px', color: 'var(--t1)', marginBottom: '2px' }}>{titulo}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--t2)', lineHeight: 1.45 }}>{texto}</div>
+                </div>
+                <Link href="/planes" style={{
+                  flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', color: '#000',
+                  padding: '10px 18px', borderRadius: '9px', fontWeight: 800, fontSize: '13px',
+                  textDecoration: 'none', boxShadow: '0 4px 14px rgba(0,168,232,.3)'
+                }}>{cta}</Link>
+              </div>
+            )
+          })()}
           <div ref={statsRef} style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? '10px' : '14px', marginBottom: isMobile ? '14px' : '24px' }}>
             {[
-              { label: 'Créditos disponibles', sublabel: planActual, color: PLAN_COLORS[planActual]||'#00A8E8', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: '', extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: PLAN_COLORS[planActual]||'#00A8E8', borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: PLAN_COLORS[planActual]||'#00A8E8' }}>{creditos} min</span><span>{creditosMax} min</span></div></div>) },
+              { label: 'Créditos disponibles', sublabel: planNombre, color: PLAN_COLORS[planActual]||'#00A8E8', icon: 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2', value: loading ? null : creditos, suffix: '', extra: (<div style={{ marginTop: '10px' }}><div style={{ height: '3px', background: 'rgba(255,255,255,0.07)', borderRadius: '2px', overflow: 'hidden' }}><div style={{ height: '100%', width: `${porcentaje}%`, minWidth: '4px', background: PLAN_COLORS[planActual]||'#00A8E8', borderRadius: '2px', transition: 'width .8s ease' }}/></div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '5px', fontSize: '10px', color: '#667788' }}><span style={{ fontWeight: 700, color: PLAN_COLORS[planActual]||'#00A8E8' }}>{creditos} min</span><span>{creditosMax} min</span></div></div>) },
               { label: 'Videos procesados', sublabel: 'Total acumulado', color: '#00E5A0', icon: 'M23 7l-7 5 7 5V7zM1 5h15a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H1z', value: loading ? null : videos.length, suffix: '', extra: null },
               { label: 'Módulos generados', sublabel: 'En todos tus videos', color: '#A078FF', icon: 'M22 12h-4l-3 9L9 3l-3 9H2', value: loading ? null : modulos, suffix: '', extra: null },
               { label: enProceso > 0 ? 'Videos en proceso' : 'Cola de proceso', sublabel: enProceso > 0 ? 'Motor activo' : 'Motor libre', color: enProceso > 0 ? '#FFB020' : '#00E5A0', icon: enProceso > 0 ? 'M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 4v6l4 2' : 'M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3', value: loading ? null : enProceso, suffix: '', extra: null }
@@ -534,7 +521,6 @@ export default function Dashboard() {
                 ))}
               </div>
             </div>
-            {/* BUSCADOR */}
             <div style={{ position: 'relative' as const }}>
               <svg style={{ position: 'absolute' as const, left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input value={busqueda} onChange={e => setBusqueda(e.target.value)} placeholder="Buscar por nombre..." style={{ width: '100%', background: 'var(--s1)', border: '1px solid var(--b)', borderRadius: '9px', padding: '9px 12px 9px 34px', color: 'var(--t1)', fontSize: '13px', fontFamily: 'inherit', outline: 'none' }} />
@@ -551,19 +537,7 @@ export default function Dashboard() {
             </div>
           )}
 
-        
-  // Mapeador de estados técnicos a texto humano
-  function estadoHumano(e: string): { label: string; color: string; bg: string; border: string; dot?: boolean } {
-    const lower = e?.toLowerCase() || ''
-    if (lower === 'completado') return { label: 'Listo para descargar', color: '#00E5A0', bg: 'rgba(0,229,160,.1)', border: 'rgba(0,229,160,.25)' }
-    if (lower === 'procesando') return { label: 'Procesando', color: '#FFB020', bg: 'rgba(255,176,32,.1)', border: 'rgba(255,176,32,.25)', dot: true }
-    if (lower === 'pendiente')  return { label: 'Recibido', color: '#00A8E8', bg: 'rgba(0,168,232,.1)', border: 'rgba(0,168,232,.25)', dot: true }
-    if (lower === 'en_revision' || lower === 'en revisión') return { label: 'En revisión', color: '#A078FF', bg: 'rgba(160,120,255,.1)', border: 'rgba(160,120,255,.25)', dot: true }
-    if (lower.includes('error')) return { label: 'Error — contacta soporte', color: '#E25C5C', bg: 'rgba(226,92,92,.1)', border: 'rgba(226,92,92,.25)' }
-    return { label: e, color: '#667788', bg: 'rgba(255,255,255,.05)', border: 'rgba(255,255,255,.1)' }
-  }
-
-  {filtrados.map((v: any) => {
+          {filtrados.map((v: any) => {
             const f = v.fields || {}
             const estado = f.Estado || 'Pendiente'
             const done = estado === 'Completado'
@@ -603,7 +577,6 @@ export default function Dashboard() {
                         </span>
                       ))}
                     </div>
-                    {/* ETIQUETA DE COLOR (usuario asigna) */}
                     {(() => {
                       const tag = etiquetasMap[v.id]
                       return (
@@ -616,7 +589,7 @@ export default function Dashboard() {
                             </span>
                           ) : (
                             <button onClick={() => {
-                              const txt = prompt('Nombre de la etiqueta (ej: Flujo, Tesorería):')
+                              const txt = prompt('Nombre de la etiqueta:')
                               if (!txt) return
                               const colors = ['#00A8E8','#00E5A0','#A078FF','#FFB020','#E25C5C','#00D4FF']
                               const color = colors[Object.keys(etiquetasMap).length % colors.length]
@@ -629,7 +602,6 @@ export default function Dashboard() {
                         </div>
                       )
                     })()}
-                {/* FEEDBACK — exactamente debajo de los chips verdes */}
                     <FeedbackPanel record={v} modulos={f.Modulos_detectados || 0} />
                   </>
                 )}
