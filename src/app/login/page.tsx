@@ -311,7 +311,7 @@ export default function Login() {
 
         <div style={{ display: 'flex', gap: '32px' }}>
           {[
-            { num: '40 min', label: 'Gratis al registrarte' },
+            { num: '30 min', label: 'Gratis al registrarte' },
             { num: '6+', label: 'Entregables por video' },
             { num: '0', label: 'Horas de edición manual' },
           ].map((s, i) => (
@@ -368,7 +368,7 @@ export default function Login() {
               {mode === 'login' ? 'Bienvenido de vuelta' : 'Crea tu cuenta gratis'}
             </h2>
             <p style={{ fontSize: '14px', color: 'var(--t2)' }}>
-              {mode === 'login' ? 'Ingresa a tu cuenta para continuar.' : '40 minutos de crédito gratuito. Sin tarjeta.'}
+              {mode === 'login' ? 'Ingresa a tu cuenta para continuar.' : '30 minutos de crédito gratuito. Sin tarjeta.'}
             </p>
           </div>
 
@@ -411,6 +411,15 @@ export default function Login() {
                 placeholder="Mínimo 6 caracteres"
                 onKeyDown={e => e.key === 'Enter' && !botonDeshabilitado && handleSubmit()}
                 style={inputStyle}/>
+              {mode === 'login' && (
+                <div style={{ textAlign: 'right', marginTop: '6px' }}>
+                  <a href="/recuperar-contrasena" style={{
+                    fontSize: '12px', color: '#00A8E8', textDecoration: 'none', fontWeight: 500
+                  }}>
+                    ¿Olvidaste tu contraseña?
+                  </a>
+                </div>
+              )}
             </div>
 
             {mode === 'register' && (
@@ -542,7 +551,7 @@ export default function Login() {
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginTop: '14px', flexWrap: 'wrap' as const }}>
             {(mode === 'register'
-              ? ['40 min gratis', 'Sin tarjeta', 'Créditos sin vencimiento']
+              ? ['30 min gratis', 'Sin tarjeta', 'Créditos sin vencimiento']
               : ['Acceso inmediato', 'Tus créditos te esperan', 'Soporte incluido']
             ).map(t => (
               <span key={t} style={{ fontSize: '11px', color: 'var(--t3)', display: 'flex', alignItems: 'center', gap: '4px' }}>
