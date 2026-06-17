@@ -525,8 +525,8 @@ export default function Upload() {
             <div style={{background:'linear-gradient(135deg,rgba(0,168,232,.08),rgba(0,168,232,.03))',border:'1px solid rgba(0,168,232,.2)',borderRadius:'12px',padding:'16px'}}>
               <div style={{fontSize:'10px',fontWeight:700,color:'var(--t3)',letterSpacing:'2px',textTransform:'uppercase' as const,marginBottom:'8px'}}>Créditos disponibles</div>
               <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'8px'}}>
-                <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'28px',fontWeight:900,background:'linear-gradient(135deg,var(--c),var(--c2))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',lineHeight:1}}>{creditos}</span>
-                <span style={{fontSize:'12px',color:'var(--t2)'}}>/ {creditosMax} min</span>
+                <span style={{fontFamily:"'Cabinet Grotesk',sans-serif",fontSize:'28px',fontWeight:900,background:'linear-gradient(135deg,var(--c),var(--c2))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',backgroundClip:'text',lineHeight:1}}>{fmtHoras(creditos)}</span>
+                <span style={{fontSize:'12px',color:'var(--t2)'}}>/ {fmtHoras(creditosMax)}</span>
               </div>
               <div style={{height:'5px',background:'rgba(0,168,232,.12)',borderRadius:'3px',overflow:'hidden'}}>
                 <div style={{height:'100%',width:`${porcentaje}%`,minWidth:'4px',background:'linear-gradient(90deg,var(--c),var(--c2))',borderRadius:'3px',boxShadow:'0 0 6px rgba(0,168,232,.4)'}}/>
