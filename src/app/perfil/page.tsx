@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { resolverPlan, getPlan, PLAN_MAX_MINUTOS as MAX_CREDITOS, PLAN_COLORS } from '@/lib/plans'
@@ -62,6 +62,13 @@ export default function Perfil() {
   const [emailCambiado, setEmailCambiado] = useState(false)
   const [errorEmail, setErrorEmail] = useState('')
   const [mostrarCambioEmail, setMostrarCambioEmail] = useState(false)
+  // Avatar
+  const [avatarSubiendo, setAvatarSubiendo] = useState(false)
+  // Facturacion internacional
+  const [paisFactura, setPaisFactura] = useState('')
+  const [idFiscal, setIdFiscal] = useState('')
+  const [razonSocialFactura, setRazonSocialFactura] = useState('')
+  const [direccionFiscal, setDireccionFiscal] = useState('')
   // Pieza 3: eliminar cuenta
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [confirmText, setConfirmText] = useState('')
@@ -98,6 +105,10 @@ export default function Perfil() {
       setPais(data.pais || parsed.pais || '')
       setRazonSocial(data.razon_social || parsed.razon_social || '')
       setTipoComprobante(((data.tipo_comprobante || parsed.tipo_comprobante || 'Boleta') as 'Boleta'|'Factura'))
+      setPaisFactura(data.pais_factura || parsed.pais_factura || '')
+      setIdFiscal(data.id_fiscal || parsed.id_fiscal || '')
+      setRazonSocialFactura(data.razon_social_factura || parsed.razon_social_factura || '')
+      setDireccionFiscal(data.direccion_fiscal || parsed.direccion_fiscal || '')
     }).catch(() => {})
 
     const email = parsed.email || ''
@@ -117,15 +128,36 @@ export default function Perfil() {
       const r = await fetch('/api/airtable/usuario', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nombre, tipo_documento: tipoDoc, numero_documento: numDoc, pais, razon_social: razonSocial, tipo_comprobante: tipoComprobante })
+        body: JSON.stringify({ nombre, tipo_documento: tipoDoc, numero_documento: numDoc, pais, razon_social: razonSocial, tipo_comprobante: tipoComprobante, pais_factura: paisFactura, id_fiscal: idFiscal, razon_social_factura: razonSocialFactura, direccion_fiscal: direccionFiscal })
       })
       if (r.ok) {
-        const updated = { ...user, nombre, tipo_documento: tipoDoc, numero_documento: numDoc, pais, razon_social: razonSocial, tipo_comprobante: tipoComprobante }
+        const updated = { ...user, nombre, tipo_documento: tipoDoc, numero_documento: numDoc, pais, razon_social: razonSocial, tipo_comprobante: tipoComprobante, pais_factura: paisFactura, id_fiscal: idFiscal, razon_social_factura: razonSocialFactura, direccion_fiscal: direccionFiscal }
         localStorage.setItem('gisto_user', JSON.stringify(updated))
         setUser(updated); setGuardado(true); setTimeout(() => setGuardado(false), 2500)
       }
     } catch {}
     setGuardando(false)
+  }
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!file.type.startsWith('image/')) return
+    if (file.size > 3 * 1024 * 1024) { alert('La imagen debe ser menor a 3MB'); return }
+    setAvatarSubiendo(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch('/api/upload/avatar', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.url) {
+        setAvatarUrl(data.url)
+        const updated = { ...user, avatarUrl: data.url }
+        localStorage.setItem('gisto_user', JSON.stringify(updated))
+        setUser(updated)
+      }
+    } catch { alert('Error subiendo imagen. Intenta de nuevo.') }
+    setAvatarSubiendo(false)
   }
 
   async function cambiarEmail() {
@@ -198,6 +230,17 @@ export default function Perfil() {
   })
   const meses = Object.entries(consumoPorMes).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 4)
 
+  const getFiscalLabel = (pais: string) => {
+    const map: Record<string, string> = {
+      'Peru': 'RUC (11 digitos)', 'Chile': 'RUT', 'Mexico': 'RFC',
+      'Colombia': 'NIT', 'Argentina': 'CUIT', 'Espana': 'CIF / NIF',
+      'Estados Unidos': 'EIN / Tax ID', 'Bolivia': 'NIT Bolivia',
+      'Ecuador': 'RUC Ecuador', 'Venezuela': 'RIF'
+    }
+    return map[pais] || 'Numero fiscal / Tax ID'
+  }
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
   const inp: React.CSSProperties = { width: '100%', background: 'rgba(255,255,255,.04)', border: '1px solid rgba(240,246,252,.1)', borderRadius: '10px', padding: '11px 14px', color: 'var(--t1)', fontSize: '14px', outline: 'none', fontFamily: 'inherit' }
 
   return (
@@ -269,9 +312,22 @@ export default function Perfil() {
         {tab === 'datos' && (
           <div style={{ maxWidth: '560px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '28px' }}>
-              <div style={{ width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--b)', flexShrink: 0 }}>
+              <div
+                onClick={() => avatarInputRef.current?.click()}
+                style={{ width: '72px', height: '72px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--b)', flexShrink: 0, cursor: 'pointer', position: 'relative' as const }}
+                title="Cambiar foto"
+              >
                 {avatarUrl ? <img src={avatarUrl} alt={nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/> : <div style={{ width: '100%', height: '100%', background: 'linear-gradient(135deg,#00A8E8,#00D4FF)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Cabinet Grotesk',sans-serif", fontWeight: 900, fontSize: '28px', color: '#000' }}>{inicial}</div>}
+                <div style={{ position: 'absolute' as const, inset: 0, background: avatarSubiendo ? 'rgba(0,0,0,.6)' : 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s' }}
+                  onMouseEnter={e => (e.currentTarget.style.background='rgba(0,0,0,.5)')}
+                  onMouseLeave={e => (e.currentTarget.style.background='rgba(0,0,0,0)')}>
+                  {avatarSubiendo
+                    ? <div style={{ width: '20px', height: '20px', borderRadius: '50%', border: '2px solid rgba(255,255,255,.3)', borderTop: '2px solid #fff', animation: 'spin 1s linear infinite' }}/>
+                    : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.8 }}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                  }
+                </div>
               </div>
+              <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} onChange={handleAvatarChange} />
               <div>
                 <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontWeight: 800, fontSize: '20px' }}>{nombre || 'Sin nombre'}</div>
                 <div style={{ fontSize: '13px', color: 'var(--t2)', marginTop: '2px' }}>{user?.email}</div>
@@ -316,38 +372,90 @@ export default function Perfil() {
                 <input style={inp} value={razonSocial} onChange={e => setRazonSocial(e.target.value)} placeholder="Para factura a empresa"/>
               </div>
 
-              {/* PIEZA 1 — Tipo de comprobante */}
-              <div style={{ gridColumn: isMobile ? '1' : '1 / -1', background: 'rgba(0,168,232,.04)', border: '1px solid rgba(0,168,232,.12)', borderRadius: '12px', padding: '16px' }}>
+              {/* PIEZA 1 — Comprobante + Facturación internacional */}
+              <div style={{ gridColumn: isMobile ? '1' : '1 / -1', background: 'rgba(0,168,232,.04)', border: '1px solid rgba(0,168,232,.15)', borderRadius: '12px', padding: '16px' }}>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--t3)', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '10px' }}>
                   Tipo de comprobante
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
                   {(['Boleta', 'Factura'] as const).map(tipo => (
                     <button key={tipo} onClick={() => setTipoComprobante(tipo)} style={{
                       flex: 1, padding: '10px', borderRadius: '9px', border: 'none', cursor: 'pointer',
-                      fontSize: '14px', fontWeight: 600, transition: 'all .2s',
+                      fontSize: '14px', fontWeight: 700, transition: 'all .2s',
                       background: tipoComprobante === tipo ? 'linear-gradient(135deg,#00A8E8,#00D4FF)' : 'rgba(255,255,255,.04)',
                       color: tipoComprobante === tipo ? '#000' : 'var(--t2)',
-                      outline: tipoComprobante !== tipo ? '1px solid rgba(240,246,252,.08)' : 'none'
+                      outline: tipoComprobante !== tipo ? '1px solid rgba(240,246,252,.08)' : 'none',
+                      boxShadow: tipoComprobante === tipo ? '0 0 16px rgba(0,168,232,.3)' : 'none'
                     }}>
                       {tipo}
                     </button>
                   ))}
                 </div>
+
                 {tipoComprobante === 'Factura' && (
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '7px', marginBottom: '10px', padding: '10px 12px', background: 'rgba(255,176,32,.06)', border: '1px solid rgba(255,176,32,.2)', borderRadius: '8px' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFB020" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: '1px' }}>
-                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                    </svg>
-                    <span style={{ fontSize: '12px', color: '#FFB020', lineHeight: 1.5 }}>
-                      Para factura asegurate de ingresar tu <strong>RUC (11 digitos)</strong> en el campo de documento y seleccionar tipo <strong>RUC</strong>.
-                    </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '12px' }}>
+                    <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--t3)', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
+                        Pais de facturacion
+                      </label>
+                      <select
+                        style={{ ...inp, WebkitAppearance: 'none', borderColor: 'rgba(0,168,232,.2)' }}
+                        value={paisFactura}
+                        onChange={e => setPaisFactura(e.target.value)}
+                      >
+                        <option value="">Selecciona el pais</option>
+                        {PAISES.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <div style={{ fontSize: '10px', color: 'var(--t3)', marginTop: '4px' }}>
+                        Puede ser diferente al pais de tu registro personal.
+                      </div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--t3)', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
+                        {paisFactura ? getFiscalLabel(paisFactura) : 'ID fiscal'}
+                      </label>
+                      <input
+                        style={{ ...inp, borderColor: 'rgba(0,168,232,.2)' }}
+                        value={idFiscal}
+                        onChange={e => setIdFiscal(e.target.value)}
+                        placeholder={paisFactura ? getFiscalLabel(paisFactura) : 'Selecciona pais primero'}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--t3)', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
+                        Razon social / Empresa
+                      </label>
+                      <input
+                        style={{ ...inp, borderColor: 'rgba(0,168,232,.2)' }}
+                        value={razonSocialFactura}
+                        onChange={e => setRazonSocialFactura(e.target.value)}
+                        placeholder="Nombre de la empresa"
+                      />
+                    </div>
+                    <div style={{ gridColumn: isMobile ? '1' : '1 / -1' }}>
+                      <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: 'var(--t3)', letterSpacing: '1px', textTransform: 'uppercase' as const, marginBottom: '6px' }}>
+                        Direccion fiscal
+                      </label>
+                      <input
+                        style={{ ...inp, borderColor: 'rgba(0,168,232,.2)' }}
+                        value={direccionFiscal}
+                        onChange={e => setDireccionFiscal(e.target.value)}
+                        placeholder="Calle, numero, ciudad, pais"
+                      />
+                    </div>
+                    <div style={{ gridColumn: isMobile ? '1' : '1 / -1', fontSize: '11px', color: 'var(--t3)', lineHeight: 1.6, padding: '10px 12px', background: 'rgba(255,176,32,.05)', border: '1px solid rgba(255,176,32,.12)', borderRadius: '8px' }}>
+                      Los datos de facturacion son de tu responsabilidad. Aplican a tu proxima compra.
+                      Para corregir una factura ya emitida escribe a{' '}
+                      <a href="mailto:admin@thegisto.com" style={{ color: '#00A8E8', textDecoration: 'none', fontWeight: 600 }}>admin@thegisto.com</a>.
+                    </div>
                   </div>
                 )}
-                <div style={{ fontSize: '11px', color: 'var(--t3)', lineHeight: 1.6 }}>
-                  Aplica a tu <strong style={{ color: 'var(--t2)' }}>proxima compra</strong>. Para una compra ya realizada, escribe a{' '}
-                  <a href="mailto:admin@thegisto.com" style={{ color: '#00A8E8', textDecoration: 'none', fontWeight: 600 }}>admin@thegisto.com</a>.
-                </div>
+
+                {tipoComprobante === 'Boleta' && (
+                  <div style={{ fontSize: '11px', color: 'var(--t3)', lineHeight: 1.6 }}>
+                    Se emitira boleta a tu nombre personal. Si necesitas factura, selecciona arriba.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -574,22 +682,34 @@ export default function Perfil() {
 
         {tab === 'consumo' && (
           <div>
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: '12px', marginBottom: '24px' }}>
-              {[
-                { label: 'Saldo disponible', val: fmtHoras(creditos), color: '#00A8E8' },
-                { label: 'Horas consumidas', val: fmtHoras(totalMinConsumidos), color: '#00E5A0' },
-                { label: 'Videos procesados', val: String(videosCompletados.length), color: '#A078FF' },
-                { label: 'Total invertido', val: totalRecargas > 0 ? `$${totalRecargas.toFixed(0)}` : '---', color: '#FFB020' },
-              ].map((s, i) => (
-                <div key={i} style={{ background: 'rgba(10,14,22,.9)', border: '1px solid rgba(240,246,252,.06)', borderRadius: '14px', overflow: 'hidden' }}>
-                  <div style={{ height: '3px', background: s.color }}/>
-                  <div style={{ padding: '16px' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--t2)', marginBottom: '8px' }}>{s.label}</div>
-                    <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '22px' : '28px', fontWeight: 900, letterSpacing: '-1px', color: s.color }}>{s.val}</div>
-                  </div>
+            {(() => {
+              const promMinVideo = videosCompletados.length > 0 ? Math.round(totalMinConsumidos / videosCompletados.length) : 0
+              const videoMasLargo = videosCompletados.reduce((max, v) => {
+                const dur = v.fields?.Duracion_entregada || v.fields?.Duracion || 0
+                return dur > max ? dur : max
+              }, 0)
+              const videosRestantes = promMinVideo > 0 ? Math.floor(creditos / promMinVideo) : null
+              const stats = [
+                { label: 'Saldo disponible', val: fmtHoras(creditos), color: '#00A8E8', sub: 'en tu cuenta ahora' },
+                { label: 'Promedio por video', val: promMinVideo > 0 ? fmtHoras(promMinVideo) : '---', color: '#00E5A0', sub: `${videosCompletados.length} video${videosCompletados.length !== 1 ? 's' : ''} procesado${videosCompletados.length !== 1 ? 's' : ''}` },
+                { label: 'Video mas largo', val: videoMasLargo > 0 ? fmtHoras(videoMasLargo) : '---', color: '#A078FF', sub: 'duracion maxima procesada' },
+                { label: 'Videos restantes', val: videosRestantes !== null ? `~${videosRestantes}` : '---', color: '#FFB020', sub: promMinVideo > 0 ? 'con tu saldo actual' : 'procesa videos para calcular' },
+              ]
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: '12px', marginBottom: '24px' }}>
+                  {stats.map((s, i) => (
+                    <div key={i} style={{ background: 'rgba(10,14,22,.95)', border: '1px solid rgba(240,246,252,.07)', borderRadius: '14px', overflow: 'hidden', boxShadow: `0 0 20px ${s.color}10` }}>
+                      <div style={{ height: '3px', background: s.color, boxShadow: `0 0 8px ${s.color}` }}/>
+                      <div style={{ padding: '16px' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--t2)', marginBottom: '8px', fontWeight: 500 }}>{s.label}</div>
+                        <div style={{ fontFamily: "'Cabinet Grotesk',sans-serif", fontSize: isMobile ? '20px' : '26px', fontWeight: 900, letterSpacing: '-1px', color: s.color, textShadow: `0 0 20px ${s.color}60`, marginBottom: '4px' }}>{s.val}</div>
+                        <div style={{ fontSize: '10px', color: 'var(--t3)' }}>{s.sub}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )
+            })()}
 
             {meses.length > 0 && (
               <div style={{ background: 'var(--s1)', border: '1px solid var(--b)', borderRadius: '14px', padding: '20px', marginBottom: '20px' }}>
@@ -646,10 +766,22 @@ export default function Perfil() {
       </main>
 
       <style>{`
-        :root { --s1: rgba(10,14,22,.95); --b: rgba(240,246,252,.08); --t1: #f0f6fc; --t2: rgba(240,246,252,.6); --t3: rgba(240,246,252,.3); --ok: #00E5A0; --warn: #FFB020; --err: #E25C5C; }
+        :root {
+          --s1: rgba(12,16,26,.97);
+          --b: rgba(240,246,252,.1);
+          --t1: #f0f6fc;
+          --t2: rgba(240,246,252,.75);
+          --t3: rgba(240,246,252,.45);
+          --c: #00BFFF;
+          --c2: #00E8FF;
+          --ok: #00F5B0;
+          --warn: #FFB020;
+          --err: #E25C5C;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #060810; color: var(--t1); font-family: 'DM Sans',sans-serif; -webkit-font-smoothing: antialiased; }
-        select option { background: #0a0e16; color: #f0f6fc; }
+        body { background: #0c1018; color: var(--t1); font-family: 'DM Sans',sans-serif; -webkit-font-smoothing: antialiased; }
+        select option { background: #0c1018; color: #f0f6fc; }
+        @keyframes spin { to { transform: rotate(360deg) } }
       `}</style>
     </div>
   )
