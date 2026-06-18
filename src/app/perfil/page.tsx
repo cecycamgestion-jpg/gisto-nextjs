@@ -143,16 +143,16 @@ export default function Perfil() {
     const file = e.target.files?.[0]
     if (!file) return
     if (!file.type.startsWith('image/')) return
-    if (file.size > 3 * 1024 * 1024) { alert('La imagen debe ser menor a 3MB'); return }
+    if (file.size > 5 * 1024 * 1024) { alert('La imagen debe ser menor a 5MB'); return }
     setAvatarSubiendo(true)
     try {
       const fd = new FormData()
-      fd.append('file', file)
-      const res = await fetch('/api/upload/avatar', { method: 'POST', body: fd })
+      fd.append('avatar', file)
+      const res = await fetch('/api/airtable/usuario/avatar', { method: 'POST', body: fd })
       const data = await res.json()
-      if (data.url) {
-        setAvatarUrl(data.url)
-        const updated = { ...user, avatarUrl: data.url }
+      if (data.avatar_url) {
+        setAvatarUrl(data.avatar_url)
+        const updated = { ...user, avatarUrl: data.avatar_url }
         localStorage.setItem('gisto_user', JSON.stringify(updated))
         setUser(updated)
       }
