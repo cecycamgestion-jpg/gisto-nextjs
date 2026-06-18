@@ -93,6 +93,10 @@ export default function Perfil() {
     setPais(parsed.pais || '')
     setRazonSocial(parsed.razon_social || '')
     setTipoComprobante((parsed.tipo_comprobante || 'Boleta') as 'Boleta'|'Factura')
+    setPaisFactura(parsed.pais_factura || '')
+    setIdFiscal(parsed.id_fiscal || '')
+    setRazonSocialFactura(parsed.razon_social_factura || '')
+    setDireccionFiscal(parsed.direccion_fiscal || '')
     if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl)
 
     fetch('/api/airtable/usuario').then(r => r.json()).then(data => {
