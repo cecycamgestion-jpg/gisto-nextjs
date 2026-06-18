@@ -9,15 +9,14 @@ const NEXTJS_URL = process.env.NEXTJS_URL || 'https://app.thegisto.com'
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, nombre, pais, tipo_documento, numero_documento, razon_social } = await req.json()
+    // Solo datos básicos — tipo/número doc y facturación van en Perfil, no en registro
+    const { email, password, nombre, pais } = await req.json()
 
-    // Validaciones
+    // Validaciones básicas
     if (!email?.includes('@')) return NextResponse.json({ error: 'Email inválido' }, { status: 400 })
     if (!password || password.length < 6) return NextResponse.json({ error: 'Contraseña mínimo 6 caracteres' }, { status: 400 })
     if (!nombre?.trim()) return NextResponse.json({ error: 'El nombre es requerido' }, { status: 400 })
     if (!pais?.trim()) return NextResponse.json({ error: 'El país es requerido' }, { status: 400 })
-    if (!tipo_documento?.trim()) return NextResponse.json({ error: 'El tipo de documento es requerido' }, { status: 400 })
-    if (!numero_documento?.trim()) return NextResponse.json({ error: 'El número de documento es requerido' }, { status: 400 })
 
     // Verificar si ya existe
     const check = await fetch(
@@ -32,7 +31,7 @@ export async function POST(req: NextRequest) {
     // Hashear contraseña
     const hashedPassword = await bcrypt.hash(password, 12)
 
-    // Crear usuario en Airtable
+    // Crear usuario en Airtable — solo datos básicos
     const create = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${AIRTABLE_KEY}`, 'Content-Type': 'application/json' },
@@ -41,22 +40,18 @@ export async function POST(req: NextRequest) {
           Email: email,
           Nombre: nombre,
           Password: hashedPassword,
-          creditos_minutos: 40,
-          plan: 'Free',
           Pais: pais,
-          Tipo_Documento: tipo_documento,
-          Numero_Documento: numero_documento,
-          Razon_Social: razon_social || nombre,
+          creditos_minutos: 30,
+          plan: 'demo',
         }
       })
     })
     const newUser = await create.json()
-
     if (!newUser.id) {
       return NextResponse.json({ error: 'Error creando cuenta' }, { status: 500 })
     }
 
-    // Email bienvenida
+    // Email de bienvenida
     try {
       await fetch(`${NEXTJS_URL}/api/email/bienvenida`, {
         method: 'POST',
@@ -70,17 +65,12 @@ export async function POST(req: NextRequest) {
       id: newUser.id,
       email,
       nombre,
-      plan: 'Free',
-      creditos: 40
+      plan: 'demo',
+      creditos: 30
     }
-
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' })
 
-    const response = NextResponse.json({
-      success: true,
-      user: tokenPayload
-    })
-
+    const response = NextResponse.json({ success: true, user: tokenPayload })
     response.cookies.set('gisto_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -88,12 +78,9 @@ export async function POST(req: NextRequest) {
       maxAge: 60 * 60 * 24 * 7,
       path: '/'
     })
-
     return response
-
   } catch (error) {
     console.error('Register error:', error)
     return NextResponse.json({ error: 'Error de servidor' }, { status: 500 })
   }
 }
-
