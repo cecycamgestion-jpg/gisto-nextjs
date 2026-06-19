@@ -1,26 +1,29 @@
 'use client'
 import Link from 'next/link'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   PLANS,
   PLANS_ORDER,
   DEMO_PLAN,
   formatHorasMin,
-  getProductId,
   isPlanComprable,
   type PlanId
 } from '@/lib/plans'
 
 // ─────────────────────────────────────────────────────────────
-// /planes — página de precios
+// /planes — página de precios con PayPal Smart Buttons
 //
 // Fuente única: lib/plans.ts. NO duplicar precios aquí.
 //
-// TODO Bloque B: mover buildCheckoutUrl() a backend (POST /api/checkout/create)
-//   - Validar usuario autenticado server-side
-//   - Validar product_id contra PLANS (no confiar en frontend)
-//   - Firmar metadata custom para que webhook Lemon confíe en user_id
+// Flujo de pago:
+// 1. Usuario logueado da clic → se renderizan los botones PayPal del plan
+// 2. PayPal SDK llama /api/paypal/crear-orden (valida plan server-side)
+// 3. Cliente paga (con PayPal o tarjeta Visa/MC sin cuenta)
+// 4. /api/paypal/capturar-orden confirma → redirige a /dashboard
+// 5. En paralelo, el webhook en Railway acredita los créditos (fuente de verdad)
 // ─────────────────────────────────────────────────────────────
+
+const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || ''
 
 const NAV_ITEMS = [
   { href:'/dashboard', label:'Dashboard', icon:'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z' },
@@ -29,10 +32,123 @@ const NAV_ITEMS = [
   { href:'/planes',    label:'Planes y pagos', icon:'M1 4h22v16H1zM1 10h22', active: true },
 ]
 
+// ─────────────────────────────────────────────────────────────
+// Componente: botones PayPal para un plan.
+// Carga el SDK una sola vez y renderiza los botones cuando está listo.
+// ─────────────────────────────────────────────────────────────
+function BotonPayPal({ planId, onPagado }: { planId: PlanId; onPagado: () => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [procesando, setProcesando] = useState(false)
+
+  useEffect(() => {
+    let cancelado = false
+
+    function renderButtons() {
+      const paypal = (window as any).paypal
+      if (!paypal || !containerRef.current) return
+      // Limpiar por si re-renderiza
+      containerRef.current.innerHTML = ''
+
+      paypal.Buttons({
+        style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'pay', height: 44 },
+
+        // 1. Crear la orden llamando a nuestro backend (valida plan server-side)
+        createOrder: async () => {
+          setError(null)
+          const res = await fetch('/api/paypal/crear-orden', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ plan: planId }),
+          })
+          const data = await res.json()
+          if (!res.ok || !data.orderID) {
+            throw new Error(data.error || 'No se pudo crear la orden')
+          }
+          return data.orderID
+        },
+
+        // 2. Capturar el pago tras aprobación
+        onApprove: async (data: any) => {
+          setProcesando(true)
+          try {
+            const res = await fetch('/api/paypal/capturar-orden', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ orderID: data.orderID }),
+            })
+            const result = await res.json()
+            if (result.status === 'COMPLETED') {
+              onPagado()
+            } else {
+              setError('El pago no se completó. Si se te cobró, contacta soporte.')
+              setProcesando(false)
+            }
+          } catch {
+            setError('Error confirmando el pago. Si se te cobró, contacta soporte.')
+            setProcesando(false)
+          }
+        },
+
+        onError: () => {
+          setError('Ocurrió un error con PayPal. Intenta de nuevo.')
+          setProcesando(false)
+        },
+
+        onCancel: () => {
+          setProcesando(false)
+        },
+      }).render(containerRef.current)
+    }
+
+    // Cargar el SDK de PayPal una sola vez
+    const existing = document.querySelector('script[data-paypal-sdk]')
+    if ((window as any).paypal) {
+      renderButtons()
+    } else if (existing) {
+      existing.addEventListener('load', () => { if (!cancelado) renderButtons() })
+    } else {
+      const script = document.createElement('script')
+      // components=buttons habilita Smart Buttons (PayPal + tarjeta)
+      script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD&components=buttons`
+      script.setAttribute('data-paypal-sdk', 'true')
+      script.onload = () => { if (!cancelado) renderButtons() }
+      script.onerror = () => { if (!cancelado) setError('No se pudo cargar PayPal.') }
+      document.body.appendChild(script)
+    }
+
+    return () => { cancelado = true }
+  }, [planId])
+
+  if (procesando) {
+    return (
+      <div style={{
+        textAlign:'center', padding:'12px', borderRadius:'10px',
+        background:'rgba(0,229,160,.08)', border:'1px solid rgba(0,229,160,.2)',
+        color:'var(--ok)', fontSize:'13px', fontWeight:700
+      }}>
+        Procesando pago…
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div ref={containerRef} />
+      {error && (
+        <div style={{ fontSize:'11px', color:'#E25C5C', textAlign:'center', marginTop:'8px', lineHeight:1.4 }}>
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Planes() {
   const [user, setUser] = useState<any>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [planSeleccionado, setPlanSeleccionado] = useState<PlanId | null>(null)
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768)
@@ -41,7 +157,6 @@ export default function Planes() {
   }, [])
 
   useEffect(() => {
-    // Guard contra localStorage corrupto (no debe romper la página)
     try {
       const u = localStorage.getItem('gisto_user')
       if (u) setUser(JSON.parse(u))
@@ -51,50 +166,27 @@ export default function Planes() {
     }
   }, [])
 
-  // TEMPORAL — mover a backend en Bloque B
-  function buildCheckoutUrl(productId: string) {
-    const base = `https://thegisto.lemonsqueezy.com/buy/${productId}`
-    if (!user) return base
-    const params = new URLSearchParams({
-      'checkout[custom][user_id]': user.id || '',
-      'checkout[email]': user.email || '',
-    })
-    return `${base}?${params.toString()}`
+  // Tras pago exitoso → al dashboard (los créditos llegan vía webhook)
+  function handlePagado() {
+    window.location.href = '/dashboard?pago=ok'
   }
 
-  /** Devuelve qué estado tiene el botón de un plan dado. */
+  /** Estado del botón de un plan: link a login, botón PayPal, o deshabilitado. */
   function estadoBoton(planId: PlanId): {
+    tipo: 'demo' | 'proximamente' | 'login' | 'paypal'
     label: string
     href: string | null
-    deshabilitado: boolean
-    motivo: string | null
   } {
     if (planId === 'demo') {
-      return { label: 'Activo con tu cuenta', href: null, deshabilitado: true, motivo: null }
+      return { tipo: 'demo', label: 'Activo con tu cuenta', href: null }
     }
     if (!isPlanComprable(planId)) {
-      return {
-        label: 'Pagos próximamente',
-        href: null,
-        deshabilitado: true,
-        motivo: 'Estamos finalizando la activación de pagos.'
-      }
+      return { tipo: 'proximamente', label: 'Pagos próximamente', href: null }
     }
     if (!user) {
-      return {
-        label: 'Iniciar sesión para comprar',
-        href: `/login?next=/planes&plan=${planId}`,
-        deshabilitado: false,
-        motivo: null
-      }
+      return { tipo: 'login', label: 'Iniciar sesión para comprar', href: `/login?next=/planes&plan=${planId}` }
     }
-    const productId = getProductId(planId)!
-    return {
-      label: 'Comenzar →',
-      href: buildCheckoutUrl(productId),
-      deshabilitado: false,
-      motivo: null
-    }
+    return { tipo: 'paypal', label: 'Comprar', href: null }
   }
 
   const Sidebar = () => (
@@ -203,7 +295,6 @@ export default function Planes() {
               </p>
             </div>
 
-            {/* 4 planes en grid */}
             <div style={{
               display:'grid',
               gridTemplateColumns: isMobile ? '1fr' : 'repeat(4,1fr)',
@@ -213,6 +304,7 @@ export default function Planes() {
               {PLANS_ORDER.map(id => {
                 const plan = PLANS[id]
                 const btn = estadoBoton(id)
+                const esteSeleccionado = planSeleccionado === id
                 return (
                   <div key={plan.id} style={{
                     background: plan.recommended ? 'linear-gradient(160deg,rgba(0,168,232,.09),#0C1018)' : '#0C1018',
@@ -278,22 +370,27 @@ export default function Planes() {
                       ))}
                     </div>
 
-                    {/* Botón: con href solo si hay product_id real y usuario logueado */}
-                    {btn.deshabilitado ? (
-                      <div style={{
-                        display:'block', textAlign:'center', padding:'12px',
-                        borderRadius:'10px', fontWeight:700, fontSize:'13px',
-                        background: 'rgba(255,255,255,.04)',
-                        color: 'var(--t3)',
-                        border: '1px solid var(--b)',
-                        cursor: 'not-allowed'
-                      }}>
-                        {btn.label}
-                      </div>
-                    ) : (
+                    {/* Botón según estado */}
+                    {btn.tipo === 'paypal' ? (
+                      esteSeleccionado ? (
+                        <BotonPayPal planId={id} onPagado={handlePagado} />
+                      ) : (
+                        <button
+                          onClick={() => setPlanSeleccionado(id)}
+                          style={{
+                            display:'block', textAlign:'center', padding:'12px', width:'100%',
+                            borderRadius:'10px', fontWeight:700, fontSize:'13px',
+                            cursor:'pointer', transition:'all .2s',
+                            background: plan.recommended ? '#00A8E8' : 'transparent',
+                            color: plan.recommended ? '#000' : 'var(--t1)',
+                            border: plan.recommended ? 'none' : '1px solid var(--b)'
+                          }}>
+                          {btn.label}
+                        </button>
+                      )
+                    ) : btn.tipo === 'login' ? (
                       <a
                         href={btn.href!}
-                        {...(btn.href!.startsWith('http') ? { target:'_blank', rel:'noopener noreferrer' } : {})}
                         style={{
                           display:'block', textAlign:'center', padding:'12px',
                           borderRadius:'10px', fontWeight:700, fontSize:'13px',
@@ -304,11 +401,22 @@ export default function Planes() {
                         }}>
                         {btn.label}
                       </a>
+                    ) : (
+                      <div style={{
+                        display:'block', textAlign:'center', padding:'12px',
+                        borderRadius:'10px', fontWeight:700, fontSize:'13px',
+                        background: 'rgba(255,255,255,.04)',
+                        color: 'var(--t3)',
+                        border: '1px solid var(--b)',
+                        cursor: 'not-allowed'
+                      }}>
+                        {btn.label}
+                      </div>
                     )}
 
-                    {btn.motivo && (
+                    {btn.tipo === 'proximamente' && (
                       <div style={{ fontSize:'10px', color:'var(--t3)', textAlign:'center', marginTop:'8px', lineHeight:1.4 }}>
-                        {btn.motivo}
+                        Estamos finalizando la activación de pagos.
                       </div>
                     )}
                   </div>
@@ -336,13 +444,13 @@ export default function Planes() {
               </div>
             </div>
 
-            {/* Microcopy de facturación corregido — USD + Lemon + Nubefact */}
+            {/* Microcopy de facturación — USD + PayPal + Nubefact */}
             <div style={{
               marginTop:'20px', background:'rgba(0,168,232,.04)',
               border:'1px solid rgba(0,168,232,.12)', borderRadius:'12px',
               padding:'14px 18px', fontSize:'13px', color:'var(--t2)', lineHeight:1.6
             }}>
-              <strong style={{ color:'var(--t1)' }}>Facturación:</strong> Los precios están en USD y no incluyen impuestos. Lemon Squeezy calcula y cobra los impuestos aplicables según el país del comprador. THE GISTO emite comprobante electrónico en USD por el total pagado, con desglose tributario cuando corresponda. Los créditos se acreditan automáticamente tras la confirmación del pago.
+              <strong style={{ color:'var(--t1)' }}>Facturación:</strong> Los precios están en USD. Puedes pagar con tu tarjeta Visa o Mastercard, no necesitas cuenta de PayPal. THE GISTO emite comprobante electrónico por el total pagado. Los créditos se acreditan automáticamente tras la confirmación del pago.
             </div>
 
             {/* Microcopy post-pago */}
