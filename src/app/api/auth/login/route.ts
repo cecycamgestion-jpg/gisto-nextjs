@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-const AIRTABLE_KEY = process.env.AIRTABLE_API_KEY
-const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID
+import { supabase } from '@/lib/supabase'
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_cambiar'
 
 export async function POST(req: NextRequest) {
@@ -12,60 +12,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Email y contraseña requeridos' }, { status: 400 })
     }
 
-    // Buscar usuario en Airtable
-    const r = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios?filterByFormula=${encodeURIComponent(`{Email}="${email}"`)}`,
-      { headers: { Authorization: `Bearer ${AIRTABLE_KEY}` } }
-    )
-    const data = await r.json()
+    // Buscar usuario en Supabase. CITEXT en la columna Email hace que esta
+    // búsqueda sea automáticamente insensible a mayúsculas — sin necesidad
+    // de normalizar el email en el código.
+    const { data: user, error } = await supabase
+      .from('Usuarios')
+      .select('id, Email, Password, Nombre, plan, creditos_minutos, Estado_Cuenta')
+      .eq('Email', email)
+      .maybeSingle()
 
-    // DEBUG 1: ¿la llamada a Airtable funcionó?
-    if (!r.ok) {
-      return NextResponse.json({
-        error: `DEBUG Airtable status ${r.status}: ${JSON.stringify(data)} | BASE=${AIRTABLE_BASE ? 'existe' : 'FALTA'} | KEY=${AIRTABLE_KEY ? AIRTABLE_KEY.slice(0,6)+'...' : 'FALTA'}`
-      }, { status: 500 })
+    if (error) {
+      console.error('Login — error Supabase:', error)
+      return NextResponse.json({ error: 'Error de servidor' }, { status: 500 })
     }
 
-    // DEBUG 2: ¿cuántos registros encontró?
-    const user = data.records?.[0]
     if (!user) {
-      return NextResponse.json({
-        error: `DEBUG: Airtable respondió OK pero NO encontró el email. Registros: ${data.records?.length ?? 'undefined'}. Email buscado: "${email}". BASE=${AIRTABLE_BASE}`
-      }, { status: 401 })
+      return NextResponse.json({ error: 'No existe una cuenta con ese email' }, { status: 401 })
     }
 
-    const fields = user.fields
-
-    // DEBUG 3: ¿el campo Password existe?
-    const storedPassword = fields.Password || ''
-    if (!storedPassword) {
-      return NextResponse.json({
-        error: `DEBUG: usuario encontrado pero campo Password vacío. Campos disponibles: ${Object.keys(fields).join(', ')}`
-      }, { status: 401 })
+    if (user.Estado_Cuenta === 'Baja') {
+      return NextResponse.json({ error: 'Esta cuenta fue eliminada' }, { status: 401 })
     }
 
+    const storedPassword = user.Password || ''
     let passwordValida = false
+
     if (storedPassword.startsWith('$2')) {
       passwordValida = await bcrypt.compare(password, storedPassword)
     } else {
+      // Compatibilidad con contraseñas viejas en texto plano (migración gradual)
       passwordValida = storedPassword === password
+      if (passwordValida) {
+        const hashed = await bcrypt.hash(password, 12)
+        await supabase.from('Usuarios').update({ Password: hashed }).eq('id', user.id)
+      }
     }
 
-    // DEBUG 4: ¿la contraseña coincidió?
     if (!passwordValida) {
-      return NextResponse.json({
-        error: `DEBUG: usuario SÍ encontrado, pero la contraseña NO coincide. (El hash existe y empieza con ${storedPassword.slice(0,4)})`
-      }, { status: 401 })
+      return NextResponse.json({ error: 'Contraseña incorrecta' }, { status: 401 })
     }
 
     const tokenPayload = {
       id: user.id,
-      email: fields.Email,
-      nombre: fields.Nombre || email.split('@')[0],
-      plan: fields.plan || 'demo',
-      creditos: fields.creditos_minutos || 0
+      email: user.Email,
+      nombre: user.Nombre || email.split('@')[0],
+      plan: user.plan || 'demo',
+      creditos: user.creditos_minutos || 0
     }
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' })
+
     const response = NextResponse.json({ success: true, user: tokenPayload })
     response.cookies.set('gisto_token', token, {
       httpOnly: true,
@@ -75,7 +70,8 @@ export async function POST(req: NextRequest) {
       path: '/'
     })
     return response
-  } catch (error: any) {
-    return NextResponse.json({ error: `DEBUG catch: ${error?.message || String(error)}` }, { status: 500 })
+  } catch (error) {
+    console.error('Login error:', error)
+    return NextResponse.json({ error: 'Error de servidor' }, { status: 500 })
   }
 }
