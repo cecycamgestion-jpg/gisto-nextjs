@@ -3,15 +3,18 @@
 // FUENTE ÚNICA DE VERDAD para los 5 planes de THE GISTO.
 //
 // Usar SIEMPRE estos valores en: planes/page.tsx, dashboard/page.tsx,
-// upload/page.tsx, /api/checkout/create, /api/airtable/usuario, webhook Lemon
+// upload/page.tsx, /api/paypal/crear-orden, /api/airtable/usuario, webhook PayPal
 // y cualquier landing dinámica. Si la landing es HTML estático, copiar manualmente.
 //
 // Reglas críticas (NO debatir, ya decidido):
 // - IDs internos en minúscula. Nunca cambiar: demo, basico, estandar, premium, empresarial.
-// - Precios en USD. Lemon Squeezy cobra impuestos aparte. GISTO NO absorbe impuestos.
+// - Precios en USD. GISTO NO absorbe impuestos.
 // - Créditos sin expirar.
 // - Plan estrella: premium.
 // - Estandar 10h calibrado para curso típico Cecycam.
+//
+// v20: migrado de LemonSqueezy a PayPal. El plan ya NO usa product IDs;
+// viaja en el custom_id de la orden PayPal del lado servidor.
 
 export type PlanId = 'demo' | 'basico' | 'estandar' | 'premium' | 'empresarial'
 export type ClaudeModel = 'haiku' | 'sonnet'
@@ -28,7 +31,6 @@ export interface Plan {
   features: string[]
   recommended: boolean
   color: string           // var(--*) o hex
-  productEnvVar: string | null  // env var con product_id Lemon (null = no comprable)
 }
 
 export const PLANS: Record<PlanId, Plan> = {
@@ -49,8 +51,7 @@ export const PLANS: Record<PlanId, Plan> = {
       'Sin tarjeta requerida'
     ],
     recommended: false,
-    color: 'var(--ok)',
-    productEnvVar: null
+    color: 'var(--ok)'
   },
   basico: {
     id: 'basico',
@@ -70,8 +71,7 @@ export const PLANS: Record<PlanId, Plan> = {
       'Créditos sin vencimiento'
     ],
     recommended: false,
-    color: 'var(--t2)',
-    productEnvVar: 'NEXT_PUBLIC_LEMON_PRODUCT_BASICO'
+    color: 'var(--t2)'
   },
   estandar: {
     id: 'estandar',
@@ -90,8 +90,7 @@ export const PLANS: Record<PlanId, Plan> = {
       'Calibrado para un curso típico de 10h'
     ],
     recommended: false,
-    color: 'var(--t2)',
-    productEnvVar: 'NEXT_PUBLIC_LEMON_PRODUCT_ESTANDAR'
+    color: 'var(--t2)'
   },
   premium: {
     id: 'premium',
@@ -111,8 +110,7 @@ export const PLANS: Record<PlanId, Plan> = {
       'Recomendado para procesar programas completos'
     ],
     recommended: true,
-    color: '#00A8E8',
-    productEnvVar: 'NEXT_PUBLIC_LEMON_PRODUCT_PREMIUM'
+    color: '#00A8E8'
   },
   empresarial: {
     id: 'empresarial',
@@ -131,8 +129,7 @@ export const PLANS: Record<PlanId, Plan> = {
       'Volumen institucional'
     ],
     recommended: false,
-    color: '#FFB020',
-    productEnvVar: 'NEXT_PUBLIC_LEMON_PRODUCT_EMPRESARIAL'
+    color: '#FFB020'
   }
 }
 
@@ -184,19 +181,23 @@ export function formatHorasMin(minutos: number | undefined | null): string {
   return `${h}h ${rem}min`
 }
 
-/** Lee el product_id de Lemon desde env. Devuelve null si no está configurado. */
-export function getProductId(planId: PlanId): string | null {
-  const plan = PLANS[planId]
-  if (!plan.productEnvVar) return null
-  // process.env funciona en cliente solo si la var empieza con NEXT_PUBLIC_
-  const id = process.env[plan.productEnvVar]
-  if (!id || id.startsWith('REEMPLAZAR_') || id.trim() === '') return null
-  return id
+// ─────────────────────────────────────────────────────────────
+// Pagos con PayPal (v20)
+// ─────────────────────────────────────────────────────────────
+
+/** ¿Están habilitados los pagos con PayPal?
+ *  Se controla con NEXT_PUBLIC_PAGOS_ACTIVOS = 'true' en Vercel.
+ *  Mientras esté en pruebas/sandbox, dejar sin setear o en 'false'
+ *  para mostrar "Pagos próximamente". */
+export function pagosActivos(): boolean {
+  return process.env.NEXT_PUBLIC_PAGOS_ACTIVOS === 'true'
 }
 
-/** ¿Está habilitada la compra de este plan? (tiene product_id real) */
+/** ¿Está habilitada la compra de este plan?
+ *  Con PayPal: comprable si NO es demo y los pagos están activos. */
 export function isPlanComprable(planId: PlanId): boolean {
-  return getProductId(planId) !== null
+  if (planId === 'demo') return false
+  return pagosActivos()
 }
 
 // Maps derivados para componentes que necesitan acceso rápido por id
