@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
+import { supabase } from '@/lib/supabase'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
-const AIRTABLE_KEY = process.env.AIRTABLE_API_KEY
-const AIRTABLE_BASE = process.env.AIRTABLE_BASE_ID
 const NEXTJS_URL = process.env.NEXTJS_URL || 'https://app.thegisto.com'
 
-// Respuesta generica — nunca revelar si el email existe o no
 const RESPUESTA_GENERICA = NextResponse.json({
   ok: true,
   message: 'Si existe una cuenta con ese correo, recibirás las instrucciones en minutos.'
@@ -19,13 +17,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Correo no válido' }, { status: 400 })
     }
 
-    // 1. Buscar usuario en Airtable
-    const r = await fetch(
-      `https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios?filterByFormula=${encodeURIComponent(`{Email}="${email}"`)}`,
-      { headers: { Authorization: `Bearer ${AIRTABLE_KEY}` } }
-    )
-    const data = await r.json()
-    const user = data.records?.[0]
+    // 1. Buscar usuario en Supabase
+    const { data: user } = await supabase
+      .from('Usuarios')
+      .select('id, Nombre')
+      .eq('Email', email)
+      .maybeSingle()
 
     // Si no existe, devolver respuesta generica sin revelar que no existe
     if (!user) return RESPUESTA_GENERICA
@@ -33,14 +30,13 @@ export async function POST(req: NextRequest) {
     // 2. Generar token seguro y expiracion de 1 hora
     const token = crypto.randomUUID()
     const expira = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-    const nombre = user.fields?.Nombre || email.split('@')[0]
+    const nombre = user.Nombre || email.split('@')[0]
 
-    // 3. Guardar token en Airtable
-    await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Usuarios/${user.id}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${AIRTABLE_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fields: { Reset_Token: token, Reset_Expira: expira } })
-    })
+    // 3. Guardar token en Supabase
+    await supabase
+      .from('Usuarios')
+      .update({ Reset_Token: token, Reset_Expira: expira })
+      .eq('id', user.id)
 
     // 4. Enviar email con el link de reset
     const resetLink = `${NEXTJS_URL}/recuperar-contrasena/confirmar?token=${token}`
@@ -98,7 +94,6 @@ export async function POST(req: NextRequest) {
     return RESPUESTA_GENERICA
   } catch (error) {
     console.error('Request reset error:', error)
-    // Aun con error, respuesta generica para no revelar estado del sistema
     return RESPUESTA_GENERICA
   }
 }
