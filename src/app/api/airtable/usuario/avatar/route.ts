@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     const publicUrl = `https://${AWS_BUCKET}.s3.${AWS_REGION}.amazonaws.com/${key}?t=${Date.now()}`
 
     const { error } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .update({ Avatar_URL: publicUrl })
       .eq('id', userId)
 
