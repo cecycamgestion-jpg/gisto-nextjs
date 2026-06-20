@@ -144,9 +144,6 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [nombre, setNombre] = useState('')
   const [pais, setPais] = useState('')
-  const [tipoDocumento, setTipoDocumento] = useState('')
-  const [numeroDocumento, setNumeroDocumento] = useState('')
-  const [razonSocial, setRazonSocial] = useState('')
   const [aceptaTerminos, setAceptaTerminos] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -176,8 +173,6 @@ export default function Login() {
     if (mode === 'register') {
       if (!nombre.trim()) { setError('El nombre completo es obligatorio'); return }
       if (!pais) { setError('Selecciona tu país'); return }
-      if (!tipoDocumento) { setError('Selecciona el tipo de documento'); return }
-      if (!numeroDocumento.trim()) { setError('El número de documento es obligatorio'); return }
       if (!aceptaTerminos) { setError('Debes aceptar los Términos y la Política de Privacidad'); return }
     }
     setLoading(true)
@@ -185,7 +180,7 @@ export default function Login() {
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register'
       const body = mode === 'login'
         ? { email, password }
-        : { email, password, nombre, pais, tipo_documento: tipoDocumento, numero_documento: numeroDocumento, razon_social: razonSocial || nombre }
+        : { email, password, nombre, pais }
       const res = await fetch(endpoint, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -424,43 +419,9 @@ export default function Login() {
 
             {mode === 'register' && (
               <>
-                <div style={{
-                  height: '1px',
-                  background: 'linear-gradient(90deg,transparent,rgba(0,168,232,0.2),transparent)',
-                  margin: '4px 0'
-                }}/>
-                <div style={{ fontSize: '11px', fontWeight: 700, color: '#00A8E8', letterSpacing: '2px', textTransform: 'uppercase' as const }}>
-                  Datos de facturación
-                </div>
-
                 <div>
                   <label style={labelStyle}>País *</label>
                   <CustomSelect value={pais} onChange={setPais} options={PAISES} placeholder="Selecciona tu país"/>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '10px' }}>
-                  <div>
-                    <label style={labelStyle}>Tipo doc. *</label>
-                    <CustomSelect value={tipoDocumento} onChange={setTipoDocumento} options={TIPOS_DOCUMENTO} placeholder="Tipo" style={{ fontSize: '13px' }}/>
-                  </div>
-                  <div>
-                    <label style={labelStyle}>N° documento *</label>
-                    <input type="text" value={numeroDocumento}
-                      onChange={e => setNumeroDocumento(e.target.value)}
-                      placeholder="Número"
-                      style={{ ...inputStyle, fontSize: '13px', padding: '13px 12px' }}/>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={labelStyle}>
-                    Empresa / Nombre factura{' '}
-                    <span style={{ color: '#667788', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }}>
-                      (opcional)
-                    </span>
-                  </label>
-                  <input type="text" value={razonSocial} onChange={e => setRazonSocial(e.target.value)}
-                    placeholder="Dejar vacío para usar tu nombre" style={inputStyle}/>
                 </div>
               </>
             )}
