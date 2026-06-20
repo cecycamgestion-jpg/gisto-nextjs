@@ -7,7 +7,7 @@ import { resolverPlan, getPlan, PLAN_MAX_MINUTOS as MAX_CREDITOS, PLAN_COLORS } 
 const PAISES = [
   'Argentina','Bolivia','Chile','Colombia','Costa Rica','Ecuador',
   'El Salvador','España','Estados Unidos','Guatemala','Honduras',
-  'Mexico','Nicaragua','Panama','Paraguay','Peru','Republica Dominicana',
+  'México','Nicaragua','Panamá','Paraguay','Perú','República Dominicana',
   'Uruguay','Venezuela','Otro'
 ]
 const TIPOS_DOCUMENTO = ['DNI','RUC','Pasaporte','Tax ID','Cedula','Otro']
