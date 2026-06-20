@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Buscar usuario con ese token
     const { data: user } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('id, Reset_Expira')
       .eq('Reset_Token', token)
       .maybeSingle()
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     if (!user.Reset_Expira || new Date(user.Reset_Expira) < new Date()) {
       // Limpiar token expirado — no bloquear la respuesta si esto falla
       await supabase
-        .from('Usuarios')
+        .from('usuarios')
         .update({ Reset_Token: null, Reset_Expira: null })
         .eq('id', user.id)
 
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // 4. Actualizar contraseña y limpiar tokens
     const { error } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .update({ Password: hashed, Reset_Token: null, Reset_Expira: null })
       .eq('id', user.id)
 
