@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Buscar usuario en Supabase
     const { data: user } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('id, Nombre')
       .eq('Email', email)
       .maybeSingle()
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Guardar token en Supabase
     await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .update({ Reset_Token: token, Reset_Expira: expira })
       .eq('id', user.id)
 
