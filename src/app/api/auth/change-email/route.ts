@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
 
     // Verificar que el nuevo correo no este en uso (CITEXT = insensible a mayúsculas)
     const { data: existente } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('id')
       .eq('Email', new_email)
       .maybeSingle()
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     // Obtener registro actual para verificar contrasena
     const { data: user, error: errUser } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('Password')
       .eq('id', userId)
       .maybeSingle()
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     // propaga el cambio de email a TODOS los videos de este usuario
     // automáticamente, en la misma operación. Cero código adicional.
     const { error: errUpdate } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .update({ Email: new_email })
       .eq('id', userId)
 
