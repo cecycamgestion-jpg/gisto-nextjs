@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Verificar contraseña
     const { data: user, error: errUser } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('Password')
       .eq('id', userId)
       .maybeSingle()
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
 
     // 2. Obtener todos los videos del usuario (para borrar sus archivos S3)
     const { data: videos } = await supabase
-      .from('Videos')
+      .from('videos')
       .select('S3_Key, URL')
       .eq('Usuario_Email', email)
 
@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     //    A diferencia de Airtable (límite de 10 por petición, requería un
     //    bucle de lotes), Postgres borra TODAS las filas que coincidan en
     //    una sola operación, sin importar cuántas sean.
-    await supabase.from('Videos').delete().eq('Usuario_Email', email)
+    await supabase.from('videos').delete().eq('Usuario_Email', email)
 
     // 5. Enviar email ANTES de anonimizar (el email aún es válido)
     const NEXTJS_URL = process.env.NEXTJS_URL || 'https://app.thegisto.com'
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     //    su FK a Usuarios.Email con ON UPDATE CASCADE se actualiza sola al
     //    cambiar el email aquí abajo, sin código adicional.
     const { error: errAnon } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .update({
         Nombre: 'Usuario eliminado',
         Email: `deleted_${userId}@thegisto.com`,
