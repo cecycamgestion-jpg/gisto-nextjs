@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const decoded = jwt.verify(token, JWT_SECRET) as any
 
     const { data: f, error } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('*')
       .eq('id', decoded.id)
       .maybeSingle()
@@ -68,7 +68,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const { error } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .update(fields)
       .eq('id', decoded.id)
 
