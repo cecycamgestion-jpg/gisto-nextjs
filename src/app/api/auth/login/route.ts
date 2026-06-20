@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     // búsqueda sea automáticamente insensible a mayúsculas — sin necesidad
     // de normalizar el email en el código.
     const { data: user, error } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('id, Email, Password, Nombre, plan, creditos_minutos, Estado_Cuenta')
       .eq('Email', email)
       .maybeSingle()
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       passwordValida = storedPassword === password
       if (passwordValida) {
         const hashed = await bcrypt.hash(password, 12)
-        await supabase.from('Usuarios').update({ Password: hashed }).eq('id', user.id)
+        await supabase.from('usuarios').update({ Password: hashed }).eq('id', user.id)
       }
     }
 
