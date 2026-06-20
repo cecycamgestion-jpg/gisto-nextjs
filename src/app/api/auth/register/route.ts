@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
 
     // Verificar si ya existe (CITEXT hace esto insensible a mayúsculas solo)
     const { data: existente, error: errCheck } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .select('id')
       .eq('Email', email)
       .maybeSingle()
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const hashedPassword = await bcrypt.hash(password, 12)
 
     const { data: newUser, error: errInsert } = await supabase
-      .from('Usuarios')
+      .from('usuarios')
       .insert({
         Email: email,
         Nombre: nombre,
