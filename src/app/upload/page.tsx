@@ -5,8 +5,6 @@ import { useRouter } from 'next/navigation'
 import { resolverPlan, getPlan, PLAN_MAX_MINUTOS as MAX_CREDITOS } from '@/lib/plans'
 
 const RAILWAY_URL = process.env.NEXT_PUBLIC_RAILWAY_URL
-const AIRTABLE_KEY = process.env.NEXT_PUBLIC_AIRTABLE_API_KEY
-const AIRTABLE_BASE = process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID
 
 const PASOS = [
   { titulo:'Sube tu grabación', desc:'MP4, MOV, AVI o link de Drive/Dropbox', icon:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12' },
@@ -177,17 +175,16 @@ export default function Upload() {
         setStep('error'); return
       }
 
-      const r = await fetch(`https://api.airtable.com/v0/${AIRTABLE_BASE}/Videos`, {
-        method:'POST',
-        headers:{'Authorization':`Bearer ${AIRTABLE_KEY}`,'Content-Type':'application/json'},
-        body: JSON.stringify({fields:{
-          URL: vUrl, VideoID: nombre||`Video-${Date.now()}`,
-          Estado: 'Pendiente',
-          Usuario_Email: userData.email||'',
-          Tipo_Contenido: tipoContenido,
-          Mantener_Interacciones: mantenerInteracciones,
-          Permitir_Capsulas_Largas: permitirCapsulasLargas
-        }})
+      const r = await fetch('/api/videos/crear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: vUrl,
+          nombre: nombre || `Video-${Date.now()}`,
+          tipoContenido: tipoContenido,
+          mantenerInteracciones: mantenerInteracciones,
+          permitirCapsulasLargas: permitirCapsulasLargas,
+        })
       })
       if (!r.ok) throw new Error('Error registrando video')
 
