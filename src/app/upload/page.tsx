@@ -105,7 +105,7 @@ export default function Upload() {
   async function subirS3(file: File): Promise<string> {
     const contentType = getMimeType(file)
     const r = await fetch(`${RAILWAY_URL}/get-upload-url`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers:{'Content-Type':'application/json','X-Gisto-Token':process.env.NEXT_PUBLIC_GISTO_TOKEN||''},
       body: JSON.stringify({filename:file.name, content_type:contentType})
     })
     if (!r.ok) throw new Error('Error obteniendo URL de subida')
@@ -159,7 +159,7 @@ export default function Upload() {
       let duracionMin = 0
       try {
         const ar = await fetch(`${RAILWAY_URL}/analizar-video`, {
-          method:'POST', headers:{'Content-Type':'application/json'},
+          method:'POST', headers:{'Content-Type':'application/json','X-Gisto-Token':process.env.NEXT_PUBLIC_GISTO_TOKEN||''},
           body: JSON.stringify({video_url: vUrl})
         })
         if (ar.ok) { const a = await ar.json(); duracionMin = a.duracion_minutos || 0 }
