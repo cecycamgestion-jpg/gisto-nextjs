@@ -1,84 +1,89 @@
+// src/app/api/airtable/usuario/route.ts
+// REEMPLAZA la versión vieja que hablaba con Airtable. Usa el mismo patrón
+// de autenticación que ya tiene /api/videos/crear: cookie 'gisto_token'
+// (JWT) → email → Supabase. Sin esa cookie, no hay forma de saber quién
+// pregunta, así que se rechaza con 401.
 import { NextRequest, NextResponse } from 'next/server'
 import jwt from 'jsonwebtoken'
 import { supabase } from '@/lib/supabase'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_cambiar'
 
-export async function GET(req: NextRequest) {
+function emailDesdeToken(req: NextRequest): string | null {
+  const token = req.cookies.get('gisto_token')?.value
+  if (!token) return null
   try {
-    const token = req.cookies.get('gisto_token')?.value
-    if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    const payload: any = jwt.verify(token, JWT_SECRET)
+    return payload.email || null
+  } catch {
+    return null
+  }
+}
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any
-
-    const { data: f, error } = await supabase
+export async function GET(req: NextRequest) {
+  const email = emailDesdeToken(req)
+  if (!email) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  try {
+    const { data, error } = await supabase
       .from('usuarios')
-      .select('*')
-      .eq('id', decoded.id)
-      .maybeSingle()
+      .select('"Nombre", plan, creditos_minutos, creditos_reservados, "Avatar_URL", "Tipo_Documento", "Numero_Documento", "Pais", "Razon_Social", "Tipo_Comprobante", "Pais_Factura", "ID_Fiscal", "RazonSocial_Factura", "Direccion_Fiscal"')
+      .ilike('Email', email)
+      .single()
 
-    if (error || !f) {
-      return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
-    }
+    if (error || !data) return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 })
 
     return NextResponse.json({
-      id: decoded.id,
-      email: f.Email,
-      nombre: f.Nombre,
-      plan: f.plan || 'demo',
-      creditos: f.creditos_minutos || 0,
-      pais: f.Pais || '',
-      tipo_documento: f.Tipo_Documento || '',
-      numero_documento: f.Numero_Documento || '',
-      razon_social: f.Razon_Social || '',
-      avatar_url: f.Avatar_URL || '',
-      tipo_comprobante: f.Tipo_Comprobante || 'Boleta',
-      pais_factura: f.Pais_Factura || '',
-      id_fiscal: f.ID_Fiscal || '',
-      razon_social_factura: f.RazonSocial_Factura || '',
-      direccion_fiscal: f.Direccion_Fiscal || '',
+      creditos:               (data.creditos_minutos || 0) - (data.creditos_reservados || 0),
+      plan:                   data.plan || 'demo',
+      nombre:                 data.Nombre || '',
+      avatar_url:             data.Avatar_URL || '',
+      tipo_documento:         data.Tipo_Documento || '',
+      numero_documento:       data.Numero_Documento || '',
+      pais:                   data.Pais || '',
+      razon_social:           data.Razon_Social || '',
+      tipo_comprobante:       data.Tipo_Comprobante || 'Boleta',
+      pais_factura:           data.Pais_Factura || '',
+      id_fiscal:              data.ID_Fiscal || '',
+      razon_social_factura:   data.RazonSocial_Factura || '',
+      direccion_fiscal:       data.Direccion_Fiscal || '',
     })
-  } catch (error) {
-    return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
 
 export async function PATCH(req: NextRequest) {
+  const email = emailDesdeToken(req)
+  if (!email) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
   try {
-    const token = req.cookies.get('gisto_token')?.value
-    if (!token) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+    const body = await req.json().catch(() => ({}))
+    const update: Record<string, any> = {}
+    // Mapeo explícito body→columna real. Nunca pasar el body directo a
+    // Supabase: evita que alguien inyecte un campo arbitrario (ej. plan,
+    // creditos_minutos) desde este endpoint pensado solo para datos de perfil.
+    if ('nombre' in body)               update.Nombre = body.nombre
+    if ('tipo_documento' in body)       update.Tipo_Documento = body.tipo_documento
+    if ('numero_documento' in body)     update.Numero_Documento = body.numero_documento
+    if ('pais' in body)                 update.Pais = body.pais
+    if ('razon_social' in body)         update.Razon_Social = body.razon_social
+    if ('tipo_comprobante' in body)     update.Tipo_Comprobante = body.tipo_comprobante
+    if ('pais_factura' in body)         update.Pais_Factura = body.pais_factura
+    if ('id_fiscal' in body)            update.ID_Fiscal = body.id_fiscal
+    if ('razon_social_factura' in body) update.RazonSocial_Factura = body.razon_social_factura
+    if ('direccion_fiscal' in body)     update.Direccion_Fiscal = body.direccion_fiscal
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any
-    const body = await req.json()
-
-    const fields: any = {}
-    if (body.nombre !== undefined)           fields.Nombre            = body.nombre
-    if (body.pais !== undefined)             fields.Pais              = body.pais
-    if (body.tipo_documento !== undefined)   fields.Tipo_Documento    = body.tipo_documento
-    if (body.numero_documento !== undefined) fields.Numero_Documento  = body.numero_documento
-    if (body.razon_social !== undefined)     fields.Razon_Social      = body.razon_social
-    if (body.tipo_comprobante !== undefined)      fields.Tipo_Comprobante    = body.tipo_comprobante
-    if (body.pais_factura !== undefined)          fields.Pais_Factura        = body.pais_factura
-    if (body.id_fiscal !== undefined)             fields.ID_Fiscal           = body.id_fiscal
-    if (body.razon_social_factura !== undefined)  fields.RazonSocial_Factura = body.razon_social_factura
-    if (body.direccion_fiscal !== undefined)      fields.Direccion_Fiscal    = body.direccion_fiscal
-
-    if (Object.keys(fields).length === 0) {
-      return NextResponse.json({ success: true })
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: 'Nada que actualizar' }, { status: 400 })
     }
 
     const { error } = await supabase
       .from('usuarios')
-      .update(fields)
-      .eq('id', decoded.id)
+      .update(update)
+      .ilike('Email', email)
 
-    if (error) {
-      console.error('Perfil PATCH — error Supabase:', error)
-      return NextResponse.json({ error: 'Error de servidor' }, { status: 500 })
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    return NextResponse.json({ error: 'Error de servidor' }, { status: 500 })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
