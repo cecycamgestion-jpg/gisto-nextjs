@@ -348,7 +348,7 @@ export default function Upload() {
           </div>
         )}
 
-        <div style={{flex:1,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'center',padding: isMobile ? '58px 14px 14px' : '32px 24px',minWidth:0,width:'100%'}}>
+       <div style={{flex:1,display:'flex',flexDirection:'column' as const,alignItems:'center',justifyContent:'flex-start',padding: isMobile ? '58px 14px 32px' : '32px 24px 48px',minWidth:0,width:'100%',overflowY:'auto' as const,minHeight:0}}>
           {!isMobile && (
             <div style={{textAlign:'center',marginBottom:'20px',width:'100%',maxWidth:'520px'}}>
               <div style={{display:'inline-flex',alignItems:'center',gap:'8px',background:'rgba(0,168,232,.08)',border:'1px solid var(--b)',padding:'4px 12px',borderRadius:'100px',fontSize:'10px',fontWeight:600,color:'var(--c)',letterSpacing:'1.5px',textTransform:'uppercase' as const,marginBottom:'14px'}}>
