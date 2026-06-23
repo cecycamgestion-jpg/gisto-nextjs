@@ -1,22 +1,47 @@
-// app/api/airtable/ordenes/route.ts
-// GET → ordenes del usuario actual (filtradas por email del token de sesión)
+// src/app/api/airtable/ordenes/route.ts
+// REEMPLAZA la versión vieja que hablaba con Airtable. Mismo patrón de
+// autenticación que /api/airtable/usuario (cookie JWT → email → Supabase).
 import { NextRequest, NextResponse } from 'next/server'
+import jwt from 'jsonwebtoken'
+import { supabase } from '@/lib/supabase'
 
-const AK = process.env.AIRTABLE_API_KEY || process.env.NEXT_PUBLIC_AIRTABLE_API_KEY || ''
-const AB = process.env.AIRTABLE_BASE_ID || process.env.NEXT_PUBLIC_AIRTABLE_BASE_ID || ''
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_cambiar'
 
 export async function GET(req: NextRequest) {
+  const token = req.cookies.get('gisto_token')?.value
+  if (!token) return NextResponse.json({ error: 'No autenticado', records: [] }, { status: 401 })
+  let email: string
   try {
-    // El email viene como query param (igual que videos, para consistencia)
-    const email = req.nextUrl.searchParams.get('email') || ''
-    const filter = email
-      ? `&filterByFormula=${encodeURIComponent(`{Email}='${email.replace(/'/g, "\\'")}'`)}`
-      : ''
-    const url = `https://api.airtable.com/v0/${AB}/Ordenes_Procesadas?sort[0][field]=Fecha&sort[0][direction]=desc&pageSize=50${filter}`
-    const r = await fetch(url, { headers: { Authorization: `Bearer ${AK}` }, cache: 'no-store' })
-    if (!r.ok) throw new Error(`Airtable ${r.status}`)
-    const data = await r.json()
-    return NextResponse.json({ records: data.records || [] })
+    const payload: any = jwt.verify(token, JWT_SECRET)
+    email = payload.email || ''
+  } catch {
+    return NextResponse.json({ error: 'Sesion expirada', records: [] }, { status: 401 })
+  }
+  if (!email) return NextResponse.json({ error: 'No autenticado', records: [] }, { status: 401 })
+
+  try {
+    const { data, error } = await supabase
+      .from('ordenes_procesadas')
+      .select('id, "Orden_ID", "Plan", "Monto_USD", "Estado", "Fecha", "Comprobante_URL", created_at')
+      .ilike('Email', email)
+      .order('created_at', { ascending: false })
+      .limit(100)
+
+    if (error) return NextResponse.json({ error: error.message, records: [] }, { status: 500 })
+
+    const records = (data || []).map((row: any) => ({
+      id: row.id,
+      createdTime: row.created_at,
+      fields: {
+        Orden_ID:         row.Orden_ID || '',
+        Plan:              row.Plan || '',
+        Monto_USD:         row.Monto_USD || 0,
+        Estado:            row.Estado || '',
+        Fecha:             row.Fecha || row.created_at,
+        Comprobante_URL:   row.Comprobante_URL || '',
+      }
+    }))
+    return NextResponse.json({ records })
   } catch (e: any) {
     return NextResponse.json({ error: e.message, records: [] }, { status: 500 })
   }
