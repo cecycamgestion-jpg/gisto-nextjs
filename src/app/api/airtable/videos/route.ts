@@ -44,7 +44,11 @@ async function fetchVideos(email: string) {
 export async function GET(req: NextRequest) {
   try {
     const email = req.nextUrl.searchParams.get('email') || ''
-    if (!email) return NextResponse.json({ error: 'Falta email', records: [] }, { status: 400 })
+    // v20: sin email, devolver lista vacía con 200 (no 400). upload_page.tsx
+    // llama esta ruta SIN email para su sidebar de "Recientes" — antes esto
+    // generaba un error 400 visible en consola sin romper nada funcionalmente
+    // (el catch silencioso ya lo absorbía), pero era ruido evitable.
+    if (!email) return NextResponse.json({ records: [] })
     const records = await fetchVideos(email)
     return NextResponse.json({ records })
   } catch (e: any) {
