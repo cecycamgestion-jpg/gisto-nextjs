@@ -191,10 +191,6 @@ export default function Upload() {
       const minutosADescontar = duracionMin > 0
         ? Math.ceil(duracionMin)
         : Math.ceil((archivo?.size || 0) / (150 * 1024 * 1024) * 60) || 30
-      const nuevosCreditos = Math.max(0, cred - minutosADescontar)
-      setCreditos(nuevosCreditos)
-      const updatedUser = { ...userData, creditos: nuevosCreditos }
-      localStorage.setItem('gisto_user', JSON.stringify(updatedUser))
 
       setStep('queued')
     } catch (e: any) { setError(e.message); setStep('error') }
